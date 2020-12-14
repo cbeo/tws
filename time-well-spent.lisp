@@ -53,7 +53,7 @@
                (uiop:quit))
               (:snapshot
                (format t "snapshotting~%")
-               (store:snapshot))
+               (db:snapshot))
               (t
                (help-menu)))))
 
@@ -201,14 +201,10 @@
 (defun activity-before (a b)
   (match (list (activity-status a) (activity-status b))
     ((list :todo _) t)
-    ((list :backlog :done) t)
-    ))
+    ((list :backlog :done) t)))
 
 (defun sort-activities (activities)
   (sort (copy-seq activities) 'activity-before))
-
-;;; Transactions
-
 
 ;;; Pages
 
@@ -342,7 +338,17 @@
       :border-top 1px dotted #(primary-color)
       :display grid
       :width 100%
-      :grid-template-columns "3fr 1fr 1fr 1fr 3fr")
+      :grid-template-columns "3fr 1fr 1fr 1fr 3fr"
+      )
+
+     (.activity-title
+      :color #(tertiary-color)
+      :margin-top 5px
+      :border-top 1px dotted #(primary-color)
+      :display grid
+      :width 100%
+      :grid-template-columns "3fr 1fr 1fr 1fr 3fr"
+      )
 
      ((:and .activity :hover)
       :background-color #(medium-dark) )
@@ -500,8 +506,12 @@
    (:p (project-description project))
 
    (:div
-    ;;:class "main-grid"
-
+    (:div :class "activity-title"
+          (:span "NAME")
+          (:span "CATEGORY")
+          (:span "ESTIMATE")
+          (:span "WORKED")
+          (:span ""))
     (dolist (activity (sort-activities  (activities-by-project project)))
       (view/activity activity)))))
 
