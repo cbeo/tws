@@ -37,6 +37,26 @@
   (initialize-current-activity)
   (lzb:start))
 
+(defun help-menu ()
+  (format t "Enter one of the following commands:~%~{~s~%~}~%"
+          '(:quit :snapshot))
+  (force-output))
+
+(defun start-loop () 
+  (start)
+  (help-menu)
+  (loop :for command = (read)
+        :do (case command
+              (:quit
+               (format t "quitting~%")
+               (lzb:stop)
+               (uiop:quit))
+              (:snapshot
+               (format t "snapshotting~%")
+               (store:snapshot))
+              (t
+               (help-menu)))))
+
 ;;; CLASSES and PROTOCOL FUNCTIONS
 
 (defclass config (db:store-object)
