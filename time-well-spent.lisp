@@ -282,6 +282,9 @@
       :border 1px solid #(secondary-color)
       :color #(secondary-color))
 
+     (.inline
+      :display inline)
+
      (.nav
       :position fixed
       :height 100%
@@ -325,7 +328,12 @@
       ((:and .card :hover)
        :transform "rotate(-0.003turn)"))
 
-     ((:or  .project .activity)
+     (.activity
+      :display grid
+      :width 100%
+      :grid-template-columns "3fr 1fr 1fr 1fr 3fr")
+
+     (.project
       (h2
        :padding-top 1.2em
        :color #(tertiary-color)
@@ -402,20 +410,15 @@
 
 (defview activity (activity)
   (with-slots (db::id name estimate currently-working-p category log) activity 
-    (:div
-     :class (if currently-working-p "activity card lighter" "activity card")
-
-     (view/activity-controls activity)
-
-     (:ul
-      :class "unstyled"
-      (:li (:h2  name))
-      (:li (:strong "Category: ") category)
-      (:li (:strong "Estimated Hours: ") estimate)
-      (:li (:strong "Hours Logged: ")
-           (if log
-               (hours-minutes-string (seconds-worked activity))
-               "00:00"))))))
+    (:div 
+     :class (if currently-working-p "activity lighter" "activity")
+     (:span  name)
+     (:span  category)
+     (:span  estimate)
+     (:span  (if log
+              (hours-minutes-string (seconds-worked activity))
+              "00:00"))
+     (:div :class "inline" (view/activity-controls activity)))))
 
 (defview activity-controls (activity)
   (with-slots (db::id name currently-working-p status log) activity
@@ -482,7 +485,7 @@
    (:p (project-description project))
 
    (:div
-    :class "main-grid"
+    ;;:class "main-grid"
     (view/new-activity-form project)
     (dolist (activity (activities-by-project project))
       (view/activity activity)))))
