@@ -16,4 +16,5 @@
                 #:*body*
                 #:http-ok
                 #:http-err
-                #:http-redirect))
+                #:http-redirect)
+  (:import-from #:trivia #:match))

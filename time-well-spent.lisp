@@ -198,6 +198,17 @@
           :key 'span-seconds
           :initial-value 0))
 
+(defun activity-before (a b)
+  (or 
+   (match (list (activity-status a) (activity-status b))
+     ((list :todo _) t)
+     ((list :backlog :done) t))
+
+   (> (seconds-worked a) (seconds-worked b))))
+
+(defun sort-activities (activities)
+  (sort (copy-seq activities) 'activity-before))
+
 ;;; Transactions
 
 
@@ -319,7 +330,7 @@
       :height 250px)
 
      (.lighter
-      :background-color #(medium))
+      :background-color #(medium-dark))
 
      (.unstyled
       :list-style-type none)
@@ -329,9 +340,14 @@
        :transform "rotate(-0.003turn)"))
 
      (.activity
+      :margin-top 5px
+      :border-top 1px dotted #(primary-color)
       :display grid
       :width 100%
       :grid-template-columns "3fr 1fr 1fr 1fr 3fr")
+
+     ((:and .activity :hover)
+      :background-color #(medium-dark) )
 
      (.project
       (h2
@@ -487,7 +503,7 @@
    (:div
     ;;:class "main-grid"
     (view/new-activity-form project)
-    (dolist (activity (activities-by-project project))
+    (dolist (activity (sort-activities  (activities-by-project project)))
       (view/activity activity)))))
 
 
