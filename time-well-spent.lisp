@@ -83,6 +83,11 @@
     :initform ""))
   (:metaclass db:persistent-class))
 
+(defun project-time (project)
+  (reduce #'+ (activities-by-project project)
+          :initial-value 0
+          :key 'seconds-worked))
+
 (defun all-projects ()
   (db:store-objects-with-class 'project))
 
@@ -112,6 +117,9 @@
 (defun hours-minutes (sec)
   (multiple-value-bind (hours frac) (floor (seconds->hours sec))
     (list hours (floor  (* frac 60)))))
+
+(defun hours-minutes-string (sec)
+  (apply #'format nil "~2,'0d:~2,'0d"  (hours-minutes sec)))
 
 (defclass activity (db:store-object)
   ((name
@@ -203,7 +211,7 @@
            (primary-color "#DA55BB")
            (dark "#202020")
            (medium-dark "#363636")
-           (medium "#949494")
+           (medium "#545454")
            (light "#EEF0EE")
            (radius-low 3px)
            (radius-mid 6px)
@@ -214,6 +222,10 @@
       :background-color #(dark)
       :color #(secondary-color))
 
+     (a
+      :text-decoration none
+      )
+     
      (.primary-color
       :color #(primary-color ))
 
@@ -221,17 +233,18 @@
       :color #(primary-color)
       :font-size 2.5em)
 
+
      (.form-input
+      :margin #(padding-mid )
       :border none
       :font-size 1.2em
-      :display block
       :color #(secondary-color)
       :background-color #(medium-dark))
 
      (label
+      :width 50%
       :margin-top 1em
       :font-size 1.2em
-      :display block
       :color #(secondary-color))
      
      (.button
@@ -266,12 +279,14 @@
        :margin-right 20px
        :color #(tertiary-color)
        :font-size 1.3em
-       :text-decoration none
        :border-top 2px solid #(secondary-color))
 
       ((:and a :hover)
        :border-right 10px solid #(secondary-color)))
 
+     (.right
+      :float right)
+     
      (.card
       :padding 1em
       :border-radius #(radius-low)
@@ -290,11 +305,11 @@
       ((:and .card :hover)
        :transform "rotate(-0.003turn)"))
 
-     (.project
+     ((:or  .project .activity)
       (h2
        :padding-top 1.2em
-       :color #(secondary-color)
-       :border-bottom 1px dotted #(tertiary-color)))
+       :color #(tertiary-color)
+       :border-bottom 1px dotted #(secondary-color)))
 
      (.canceller
       :color #(primary-color))
@@ -312,13 +327,19 @@
 (defview project-dashboard (project)
   (with-slots (db::id name description) project
     (:a :href (format nil  "/project/view/~a" db::id)
-        (:div :class "project card"
+        (:div :class (if (and *current-activity*
+                              (eql project (activity-project *current-activity*)))
+                         "project card lighter"
+                         "project card")
               (:h2 name)
               (when (and *current-activity*
                          (eql project (activity-project *current-activity*)))
                 (:p "Currently working on "
                     (:span :class "primary-color" (activity-name *current-activity*))))
+              (:p "Total Time:"
+                  (hours-minutes-string (project-time project)))
               (:p description)
+              
               ))))
 
 (defview nav ()
@@ -328,12 +349,12 @@
         (:a :href "/config" "Config")))
 
 
-(defpage dashboard () (:title "Dashboard"
+(defpage dashboard () (:title "TWS - DASHBOARD"
                        :stylesheets ("/css/main.css"))
   (view/nav)
   (:div
    :class "main-content"
-   (:h1 "Dashboard")
+   (:h1 "time well spent")
    (:div
     (:a :class "button"
         :href "/project/add"
@@ -360,46 +381,74 @@
              "Create Project"))))
 
 (defview activity (activity)
-  (with-slots (db::id name estimate currently-working-p status category log) activity 
+  (with-slots (db::id name estimate currently-working-p category log) activity 
     (:div
-     :class (if currently-working-p "card lighter" "card")
-     (if currently-working-p 
-         (:a :class "button"
-             :href (format nil  "/activity/clock-out/~a" db::id)
-             "Clock Out")
-         (:a :class "button"
-             :href (format nil  "/activity/clock-in/~a" db::id)
-             "Clock In"))
+     :class (if currently-working-p "activity card lighter" "activity card")
+
+     (view/activity-controls activity)
+
      (:ul
       :class "unstyled"
-      (:li (:h3  name))
+      (:li (:h2  name))
       (:li (:strong "Category: ") category)
-      (:li (:strong "Status: ") status)
-      (:li (:strong "Estimated: ") estimate " Hours")
+      (:li (:strong "Estimated Hours: ") estimate)
       (:li (:strong "Hours Logged: ")
            (if log
-               (apply #'format nil "~2,'0d:~2,'0d"
-                      (hours-minutes (seconds-worked activity)))
+               (hours-minutes-string (seconds-worked activity))
                "00:00"))))))
+
+(defview activity-controls (activity)
+  (with-slots (db::id name currently-working-p status log) activity
+    (let ((status-id (format nil "status-~a" db::id))
+          (form-id (format nil "status-form-~a" db::id)))
+      (if currently-working-p 
+          (:a :class "button"
+              :href (format nil  "/activity/clock-out/~a" db::id)
+              "Clock Out")
+          (:a :class "button"
+              :href (format nil  "/activity/clock-in/~a" db::id)
+              "Clock In"))
+      (:form :method "POST" :action (format nil "/activity/status/~a" db::id)
+             :style "display:inline;"
+             :id form-id
+             (:select :name "status" :class "button" :id status-id
+               (dolist (s (statuses (get-config)))
+                 (if (eql s status)
+                     (:option :value s :selected "true" s)
+                     (:option :value s s)))))
+      (:script
+       :type "text/javascript"
+       (ps:ps
+         (ps:chain document
+                   (get-element-by-id (ps:lisp status-id))
+                   (add-event-listener
+                    "change"
+                    (lambda (event)
+                      (ps:chain document
+                                (get-element-by-id (ps:lisp form-id))
+                                (submit))))))))))
 
 (defview new-activity-form (project)
   (:div
+   (:h3 "Add Another Activity")
    (:form
     :method "POST"
     :action (format nil "/activity/add-to-project/~a" (db:store-object-id project))
-    (:input :name "name" :placeholder "Name" :class "form-input")
-    (:label :for "estimate" "Hours")
+
+    (:input :name "name" :placeholder "Name" :class "form-input" :style "width:50%")
+    (:br)
+
     (:input :name "estimate" :type "number" :min "0" :step "0.1"
-            :class "form-input")
-    (:label :for "status" "Status")
-    (:select :name "status" :style "min-width:50%" :class "form-input"      
-      (dolist (status (statuses (get-config)))
-        (:option :value status status)))
-    (:label :for "category" "Category")
-    (:select :name "category" :style "min-width:50%" :class "form-input"
+            :class "form-input" :placeholder "Estimated Hours"
+            :style "width:50%")
+    (:br)
+    (:select :name "category" :style "width:50%" :class "form-input"
       (dolist (category (categories (get-config)))
         (:option :value category category)))
-    (:button :class "button" :type "submit" "Create Activity"))))
+    (:label :for "category"  "Category")
+    (:br)
+    (:button :class "button" :type "submit" "Create Activity")
+    )))
 
 (defpage project (project)
     (:title "Project View"
@@ -408,6 +457,8 @@
   (:div
    :class "main-content"
    (:h1 (project-name project))
+   (:p "Total Time: "
+       (hours-minutes-string (project-time project)))
    (:p (project-description project))
 
    (:div
@@ -456,13 +507,7 @@
                  :id "new-status-input"
                  :name "status"
                  :pattern "[a-zA-Z0-9\-_]+")
-         (:button :type "submit" :class "button"   "Add Status"))
-  (:script
-   (ps:ps
-     (let ((input (ps:chain document (get-element-by-id "new-status-input"))))
-       (setf (ps:chain input oninvalid)
-             (lambda (event)
-               (setf (ps:chain  disabled) true)))))))
+         (:button :type "submit" :class "button"   "Add Status")))
 
 (defpage config () (:title "Config"
                     :stylesheets ("/css/main.css"))
@@ -539,7 +584,6 @@
                      :project project
                      :name (getf *body* :name)
                      :estimate (parse-float:parse-float (getf *body* :estimate))
-                     :status (make-keyword  (getf *body* :status))
                      :category (getf *body* :category))))
   (http-redirect (format nil "/project/view/~a" projectid)))
 
@@ -553,6 +597,16 @@
 (defroute :get "/activity/clock-out/:id"
   (let ((activity (db:store-object-with-id (parse-integer id))))
     (db:with-transaction ()  (stop-working activity))
+    (http-redirect (format nil "/project/view/~a"
+                           (db:store-object-id
+                            (activity-project activity))))))
+
+
+(defroute :post "/activity/status/:id"
+  (let ((activity (db:store-object-with-id (parse-integer id))))
+    (db:with-transaction ()
+      (setf (activity-status activity)
+            (make-keyword (getf *body* :status))))
     (http-redirect (format nil "/project/view/~a"
                            (db:store-object-id
                             (activity-project activity))))))
