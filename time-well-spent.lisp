@@ -199,12 +199,10 @@
           :initial-value 0))
 
 (defun activity-before (a b)
-  (or 
-   (match (list (activity-status a) (activity-status b))
-     ((list :todo _) t)
-     ((list :backlog :done) t))
-
-   (> (seconds-worked a) (seconds-worked b))))
+  (match (list (activity-status a) (activity-status b))
+    ((list :todo _) t)
+    ((list :backlog :done) t)
+    ))
 
 (defun sort-activities (activities)
   (sort (copy-seq activities) 'activity-before))
@@ -468,18 +466,18 @@
                                 (submit))))))))))
 
 (defview new-activity-form (project)
-  (:div
+  (:div :class "right" :style "margin-right: 10%;margin-bottom:50px;"
    (:h3 "Add Another Activity")
    (:form
     :method "POST"
     :action (format nil "/activity/add-to-project/~a" (db:store-object-id project))
 
-    (:input :name "name" :placeholder "Name" :class "form-input" :style "width:50%")
+    (:input :name "name" :placeholder "Name" :class "form-input" :style "width:100%")
     (:br)
 
     (:input :name "estimate" :type "number" :min "0" :step "0.1"
             :class "form-input" :placeholder "Estimated Hours"
-            :style "width:50%")
+            :style "width:100%")
     (:br)
     (:select :name "category" :style "width:50%" :class "form-input"
       (dolist (category (categories (get-config)))
@@ -495,6 +493,7 @@
   (view/nav)
   (:div
    :class "main-content"
+    (view/new-activity-form project)
    (:h1 (project-name project))
    (:p "Total Time: "
        (hours-minutes-string (project-time project)))
@@ -502,7 +501,7 @@
 
    (:div
     ;;:class "main-grid"
-    (view/new-activity-form project)
+
     (dolist (activity (sort-activities  (activities-by-project project)))
       (view/activity activity)))))
 
