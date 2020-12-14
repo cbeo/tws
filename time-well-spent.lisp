@@ -316,12 +316,12 @@
       :float right)
      
      (.card
-      :padding 1em
+      :padding 0.8em
       :border-radius #(radius-low)
       :background-color #(medium-dark)
       :text-decoration none
       :color #(secondary-color)
-      :height 250px)
+      :height 170px)
 
      (.lighter
       :background-color #(medium-dark))
@@ -355,7 +355,7 @@
 
      (.project
       (h2
-       :padding-top 1.2em
+       :padding-top 0
        :color #(tertiary-color)
        :border-bottom 1px dotted #(secondary-color)))
 
@@ -370,7 +370,7 @@
       :display grid
       :grid-column-gap 1.5em
       :grid-row-gap 1.5em
-      :grid-template-columns "repeat(auto-fit, minmax(340px, 500px))"))))
+      :grid-template-columns "repeat(auto-fit, minmax(250px, auto))"))))
 
 (defview project-dashboard (project)
   (with-slots (db::id name description) project
