@@ -2,6 +2,7 @@
 
 (defpackage #:time-well-spent
   (:use #:cl)
+  (:nicknames :tws)
   (:local-nicknames (#:db #:bknr.datastore))
   (:import-from #:spinneret
                #:with-html

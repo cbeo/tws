@@ -18,12 +18,23 @@
                  :directory (data-store-path)
                  :subsystems (list (make-instance 'db:store-object-subsystem))))
 
+(defvar *current-activity* nil
+  "For single-user prototype only. Holds the current activity. Will be
+  set at initialization:")
+
+(defun initialize-current-activity ()
+  (dolist (act (db:store-objects-with-class 'activity))
+    (when (currently-working-p act)
+      (setf *current-activity* act)
+      (return-from initialize-current-activity))))
+
 (defun start ()
   (unless (boundp 'db:*store*)
     (initialize-datastore))
   (unless (get-config)
     (db:with-transaction ()
       (make-instance 'config)))
+  (initialize-current-activity)
   (lzb:start))
 
 ;;; CLASSES and PROTOCOL FUNCTIONS
@@ -88,7 +99,9 @@
 
 (defun span-seconds (span)
   (with-slots (start-time stop-time) span
-    (- stop-time start-time)))
+    (if stop-time
+        (- stop-time start-time)
+        0)))
 
 (defun seconds->minutes (sec)
   (/ sec 60.0))
@@ -97,8 +110,8 @@
   (/ sec 60.0 60.0))
 
 (defun hours-minutes (sec)
-  (multiple-value-bind (hours frac) (round (seconds->hours sec))
-    (list hours (floor (* frac 60)))))
+  (multiple-value-bind (hours frac) (floor (seconds->hours sec))
+    (list hours (floor  (* frac 60)))))
 
 (defclass activity (db:store-object)
   ((name
@@ -136,19 +149,25 @@
   (:metaclass db:persistent-class))
 
 (defun start-working (activity)
+  (when *current-activity*
+    (stop-working *current-activity*))
+
   (setf (currently-working-p activity) (get-universal-time)
-        (status activity) :todo))
+        (activity-status activity) :todo)
+  (setf *current-activity* activity))
 
 (defun stop-working (activity)
+  (assert (eql  activity *current-activity*))
   (push (make-instance 'time-span
                        :start (currently-working-p activity)
                        :stop (get-universal-time))
         (activity-log activity))
-  (setf (currently-working-p activity) nil))
+  (setf (currently-working-p activity) nil)
+  (setf *current-activity* nil))
 
 (defun seconds-worked (activity)
   (reduce #'+ (activity-log activity)
-          :key #'span-seconds
+          :key 'span-seconds
           :initial-value 0))
 
 ;;; Transactions
@@ -195,12 +214,15 @@
       :background-color #(dark)
       :color #(secondary-color))
 
+     (.primary-color
+      :color #(primary-color ))
 
      (h1
       :color #(primary-color)
       :font-size 2.5em)
 
      (.form-input
+      :border none
       :font-size 1.2em
       :display block
       :color #(secondary-color)
@@ -258,6 +280,9 @@
       :color #(secondary-color)
       :height 250px)
 
+     (.lighter
+      :background-color #(medium))
+
      (.unstyled
       :list-style-type none)
 
@@ -288,8 +313,13 @@
   (with-slots (db::id name description) project
     (:a :href (format nil  "/project/view/~a" db::id)
         (:div :class "project card"
-         (:h2 name)
-         (:p description)))))
+              (:h2 name)
+              (when (and *current-activity*
+                         (eql project (activity-project *current-activity*)))
+                (:p "Currently working on "
+                    (:span :class "primary-color" (activity-name *current-activity*))))
+              (:p description)
+              ))))
 
 (defview nav ()
   (:div :class "nav"
@@ -329,13 +359,62 @@
     (:button :type "submit" :class "button"
              "Create Project"))))
 
-(defpage project (project) (:title "Project View"
-                            :stylesheets ("/css/main.css"))
+(defview activity (activity)
+  (with-slots (db::id name estimate currently-working-p status category log) activity 
+    (:div
+     :class (if currently-working-p "card lighter" "card")
+     (if currently-working-p 
+         (:a :class "button"
+             :href (format nil  "/activity/clock-out/~a" db::id)
+             "Clock Out")
+         (:a :class "button"
+             :href (format nil  "/activity/clock-in/~a" db::id)
+             "Clock In"))
+     (:ul
+      :class "unstyled"
+      (:li (:h3  name))
+      (:li (:strong "Category: ") category)
+      (:li (:strong "Status: ") status)
+      (:li (:strong "Estimated: ") estimate " Hours")
+      (:li (:strong "Hours Logged: ")
+           (if log
+               (apply #'format nil "~2,'0d:~2,'0d"
+                      (hours-minutes (seconds-worked activity)))
+               "00:00"))))))
+
+(defview new-activity-form (project)
+  (:div
+   (:form
+    :method "POST"
+    :action (format nil "/activity/add-to-project/~a" (db:store-object-id project))
+    (:input :name "name" :placeholder "Name" :class "form-input")
+    (:label :for "estimate" "Hours")
+    (:input :name "estimate" :type "number" :min "0" :step "0.1"
+            :class "form-input")
+    (:label :for "status" "Status")
+    (:select :name "status" :style "min-width:50%" :class "form-input"      
+      (dolist (status (statuses (get-config)))
+        (:option :value status status)))
+    (:label :for "category" "Category")
+    (:select :name "category" :style "min-width:50%" :class "form-input"
+      (dolist (category (categories (get-config)))
+        (:option :value category category)))
+    (:button :class "button" :type "submit" "Create Activity"))))
+
+(defpage project (project)
+    (:title "Project View"
+     :stylesheets ("/css/main.css"))
   (view/nav)
   (:div
    :class "main-content"
    (:h1 (project-name project))
-   (:p (project-description project))))
+   (:p (project-description project))
+
+   (:div
+    :class "main-grid"
+    (view/new-activity-form project)
+    (dolist (activity (activities-by-project project))
+      (view/activity activity)))))
 
 
 (defview categories-list (categories)
@@ -452,3 +531,28 @@
   (db:with-transaction ()
     (remove-status (get-config) (parse-integer  index)))
   (http-redirect "/config"))
+
+(defroute :post "/activity/add-to-project/:projectid"
+  (when-let (project (db:store-object-with-id (parse-integer projectid)))
+    (db:with-transaction ()
+      (make-instance 'activity
+                     :project project
+                     :name (getf *body* :name)
+                     :estimate (parse-float:parse-float (getf *body* :estimate))
+                     :status (make-keyword  (getf *body* :status))
+                     :category (getf *body* :category))))
+  (http-redirect (format nil "/project/view/~a" projectid)))
+
+(defroute :get "/activity/clock-in/:id"
+  (let ((activity (db:store-object-with-id (parse-integer id))))
+    (db:with-transaction ()  (start-working activity))    
+    (http-redirect (format nil "/project/view/~a"
+                           (db:store-object-id
+                            (activity-project activity))))))
+
+(defroute :get "/activity/clock-out/:id"
+  (let ((activity (db:store-object-with-id (parse-integer id))))
+    (db:with-transaction ()  (stop-working activity))
+    (http-redirect (format nil "/project/view/~a"
+                           (db:store-object-id
+                            (activity-project activity))))))
