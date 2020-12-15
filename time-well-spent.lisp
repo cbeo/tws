@@ -269,6 +269,9 @@
      (.primary-color
       :color #(primary-color ))
 
+     (.tertiary-color
+      :color #(tertiary-color))
+
      (h1
       :color #(primary-color)
       :font-size 2.5em)
@@ -402,7 +405,7 @@
                 (:p "Currently working on "
                     (:span :class "primary-color" (activity-name *current-activity*))))
               (:p "Total Time:"
-                  (hours-minutes-string (project-time project)))
+                  (:span :class "tertiary-color" (hours-minutes-string (project-time project))))
               (:p description)
               
               ))))
@@ -522,7 +525,7 @@
     (view/new-activity-form project)
    (:h1 (project-name project))
    (:p "Total Time: "
-       (hours-minutes-string (project-time project)))
+       (:span :class "tertiary-color" (hours-minutes-string (project-time project))))
    (:p (project-description project))
 
    (:div
