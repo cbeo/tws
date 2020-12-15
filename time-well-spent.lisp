@@ -462,6 +462,9 @@
                  (if (eql s status)
                      (:option :value s :selected "true" s)
                      (:option :value s s)))))
+      (:a :class "button"
+          :href (format nil "/activity/delete/~a" db::id)
+          "❌")
       (:script
        :type "text/javascript"
        (ps:ps
@@ -663,3 +666,12 @@
     (http-redirect (format nil "/project/view/~a"
                            (db:store-object-id
                             (activity-project activity))))))
+
+(defroute :get "/activity/delete/:id"
+  (let* ((activity (db:store-object-with-id (parse-integer id)))
+         (project  (activity-project activity)))
+    (db:with-transaction ()
+      (db:store-object-touch project)
+      (db:delete-object activity))
+    (http-redirect (format nil "/project/view/~a"
+                           (db:store-object-id project)))))
