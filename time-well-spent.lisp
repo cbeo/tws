@@ -109,7 +109,9 @@
           :key 'seconds-worked))
 
 (defun all-projects ()
-  (db:store-objects-with-class 'project))
+  (sort (copy-seq (db:store-objects-with-class 'project))
+        #'>
+        :key (lambda (o) (db:store-object-last-change o 1))))
 
 (defclass time-span (db:store-object)
   ((start-time
@@ -182,7 +184,8 @@
 
   (setf (currently-working-p activity) (get-universal-time)
         (activity-status activity) :todo)
-  (setf *current-activity* activity))
+  (setf *current-activity* activity)
+  (db:store-object-touch (activity-project activity)))
 
 (defun stop-working (activity)
   (assert (eql  activity *current-activity*))
@@ -191,6 +194,7 @@
                        :stop (get-universal-time))
         (activity-log activity))
   (setf (currently-working-p activity) nil)
+  (db:store-object-touch (activity-project activity))
   (setf *current-activity* nil))
 
 (defun seconds-worked (activity)
@@ -320,9 +324,8 @@
       :border-radius #(radius-low)
       :background-color #(medium-dark)
       :text-decoration none
-      :color #(secondary-color)
-      :height 170px)
-
+      :color #(secondary-color))
+     
      (.lighter
       :background-color #(medium-dark))
 
@@ -632,7 +635,8 @@
                      :project project
                      :name (getf *body* :name)
                      :estimate (parse-float:parse-float (getf *body* :estimate))
-                     :category (getf *body* :category))))
+                     :category (getf *body* :category))
+      (db:store-object-touch project)))
   (http-redirect (format nil "/project/view/~a" projectid)))
 
 (defroute :get "/activity/clock-in/:id"
@@ -654,7 +658,8 @@
   (let ((activity (db:store-object-with-id (parse-integer id))))
     (db:with-transaction ()
       (setf (activity-status activity)
-            (make-keyword (getf *body* :status))))
+            (make-keyword (getf *body* :status)))
+      (db:store-object-touch (activity-project activity)))
     (http-redirect (format nil "/project/view/~a"
                            (db:store-object-id
                             (activity-project activity))))))
