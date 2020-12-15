@@ -240,7 +240,7 @@
            (primary-color "#DA55BB")
            (dark "#202020")
            (medium-dark "#363636")
-           (medium "#545454")
+           (medium "#444444")
            (light "#EEF0EE")
            (radius-low 3px)
            (radius-mid 6px)
@@ -326,8 +326,11 @@
       :text-decoration none
       :color #(secondary-color))
      
-     (.lighter
-      :background-color #(medium-dark))
+     (.primary-highlight
+      :border 1px solid #(primary-color))
+
+     (.bg-highlight
+      :background-color #(medium))
 
      (.unstyled
       :list-style-type none)
@@ -380,7 +383,7 @@
     (:a :href (format nil  "/project/view/~a" db::id)
         (:div :class (if (and *current-activity*
                               (eql project (activity-project *current-activity*)))
-                         "project card lighter"
+                         "project card primary-highlight"
                          "project card")
               (:h2 name)
               (when (and *current-activity*
@@ -434,7 +437,7 @@
 (defview activity (activity)
   (with-slots (db::id name estimate currently-working-p category log) activity 
     (:div 
-     :class (if currently-working-p "activity lighter" "activity")
+     :class (if currently-working-p "activity bg-highlight" "activity")
      (:span  name)
      (:span  category)
      (:span  estimate)
