@@ -203,9 +203,20 @@
           :initial-value 0))
 
 (defun activity-before (a b)
-  (match (list (activity-status a) (activity-status b))
-    ((list :todo _) t)
-    ((list :backlog :done) t)))
+  (or 
+   (match (list (activity-status a) (activity-status b))
+     ((list :todo :todo)
+      (> (seconds-worked a)
+         (seconds-worked b)))
+     ((list :todo _) t)
+     ((list :backlog :done) t)
+     ((list s1 s2)
+      (and (eql s1 s2)
+           (> (seconds-worked a)
+              (seconds-worked b)))))
+
+   (< (db:store-object-last-change a 2)
+      (db:store-object-last-change b 2))))
 
 (defun sort-activities (activities)
   (sort (copy-seq activities) 'activity-before))
@@ -357,7 +368,7 @@
       )
 
      ((:and .activity :hover)
-      :background-color #(medium-dark) )
+      :background-color #(medium) )
 
      (.project
       (h2
