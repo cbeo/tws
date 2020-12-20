@@ -57,6 +57,40 @@
               (t
                (help-menu)))))
 
+;;; Utilities
+
+(defun local-datestring->utc (datestring)
+  (local-time:timestamp-to-universal
+   (local-time:parse-timestring
+    (format nil "~aT00:00:00.000000-06:00" datestring))))
+
+(defun remove-nth (n ls)
+  (cond ((= n 0) (cdr ls))
+        ((null ls) ls)
+        (t 
+         (cons (car ls)
+               (remove-nth (1- n) (cdr ls))))))
+
+(defun seconds->minutes (sec)
+  (/ sec 60.0))
+
+(defun seconds->hours (sec)
+  (/ sec 60.0 60.0))
+
+(defun hours-minutes (sec)
+  (multiple-value-bind (hours frac) (floor (seconds->hours sec))
+    (list hours (floor  (* frac 60)))))
+
+(defun hours-minutes-string (sec)
+  (apply #'format nil "~2,'0d:~2,'0d"  (hours-minutes sec)))
+
+
+(defun make-keyword (string)
+  (and string
+       (plusp (length string))
+       (intern (format nil "~a" (string-upcase string))
+               (find-package 'keyword))))
+
 ;;; CLASSES and PROTOCOL FUNCTIONS
 
 (defclass config (db:store-object)
@@ -77,12 +111,6 @@
 (defun add-category (config category)
   (pushnew category (categories config)))
 
-(defun remove-nth (n ls)
-  (cond ((= n 0) (cdr ls))
-        ((null ls) ls)
-        (t 
-         (cons (car ls)
-               (remove-nth (1- n) (cdr ls))))))
 
 (defun remove-category (config index)
   (setf (categories config)
@@ -103,10 +131,11 @@
     :initform ""))
   (:metaclass db:persistent-class))
 
-(defun project-time (project)
+(defun project-time (project &key start (stop (get-universal-time)))
   (reduce #'+ (activities-by-project project)
           :initial-value 0
-          :key 'seconds-worked))
+          :key (lambda (activity)
+                 (seconds-worked activity :start start :stop stop))))
 
 (defun all-projects ()
   (sort (copy-seq (db:store-objects-with-class 'project))
@@ -124,24 +153,16 @@
     :initform nil))
   (:metaclass db:persistent-class))
 
+
 (defun span-seconds (span)
   (with-slots (start-time stop-time) span
     (if stop-time
         (- stop-time start-time)
         0)))
 
-(defun seconds->minutes (sec)
-  (/ sec 60.0))
-
-(defun seconds->hours (sec)
-  (/ sec 60.0 60.0))
-
-(defun hours-minutes (sec)
-  (multiple-value-bind (hours frac) (floor (seconds->hours sec))
-    (list hours (floor  (* frac 60)))))
-
-(defun hours-minutes-string (sec)
-  (apply #'format nil "~2,'0d:~2,'0d"  (hours-minutes sec)))
+(defun span-between-p (span start stop)
+  (and (stop-time span)
+       (< start (start-time span) (stop-time span) stop)))
 
 (defclass activity (db:store-object)
   ((name
@@ -197,10 +218,15 @@
   (db:store-object-touch (activity-project activity))
   (setf *current-activity* nil))
 
-(defun seconds-worked (activity)
-  (reduce #'+ (activity-log activity)
-          :key 'span-seconds
-          :initial-value 0))
+(defun seconds-worked (activity &key start (stop (get-universal-time)))
+  (let ((activities
+          (if start
+              (remove-if-not (lambda (span) (span-between-p span start stop))
+                             (activity-log activity))
+              (activity-log activity))))
+    (reduce #'+ activities
+            :key 'span-seconds
+            :initial-value 0)))
 
 (defun activity-before (a b)
   (or 
@@ -414,7 +440,9 @@
   (:div :class "nav"
         (:a :href "/" "Dashboard")
         " "
-        (:a :href "/config" "Config")))
+        (:a :href "/config" "Config")
+        " "
+        (:a :href "/stats" "Stats")))
 
 
 (defpage dashboard () (:title "TWS - DASHBOARD"
@@ -580,19 +608,45 @@
                  :pattern "[a-zA-Z0-9\-_]+")
          (:button :type "submit" :class "button"   "Add Status")))
 
-(defpage config () (:title "Config"
+(defpage config () (:title "TWS - Config"
                     :stylesheets ("/css/main.css"))
   (with-slots (categories statuses) (get-config) 
     (view/nav)
     (:div
      :class "main-content"
      (:h1 "Config")
-     (:div
-      :class "main-content"
-      (view/categories-list categories)
-      (view/add-category-form)
-      (view/statuses-list statuses)
-      (view/add-status-form)))))
+     (view/categories-list categories)
+     (view/add-category-form)
+     (view/statuses-list statuses)
+     (view/add-status-form))))
+
+
+
+(defpage stats () (:title "TWS - Stats"
+                   :stylesheets ("/css/main.css"))
+  (let ((query (query-plist)))
+    (view/nav)
+    (:div
+     :class "main-content"
+     (:h1 "Stats")
+     (:div 
+      (:form
+       :method "GET" :action "/stats"
+       (:label :for "start-date" "Days between ")
+       (:input :class "form-input" :name "start-date" :type "date" )
+       (:label :for "end-date" " and " )
+       (:input :class "form-input" :name "end-date"  :type "date" )
+       (:button :type "submit" :class "button" "View")))
+     (when query
+       (let ((start (local-datestring->utc (getf query :start-date)))
+             (stop (local-datestring->utc (getf query :end-date))))
+         (dolist (proj (all-projects))
+           (let ((seconds (project-time proj :start start :stop stop)))
+             (when (plusp seconds)
+               (:p
+                (project-name proj) " "  (hours-minutes-string seconds)))))))
+     )))
+
 
 ;;; ROUTES
 
@@ -620,11 +674,6 @@
 (defroute :get "/config"
   (http-ok "text/html" (page/config)))
 
-(defun make-keyword (string)
-  (and string
-       (plusp (length string))
-       (intern (format nil "~a" (string-upcase string))
-               (find-package 'keyword))))
 
 (defroute :post "/config/add-status"
   (when-let (new-status (make-keyword (getf *body* :status)))  
@@ -692,3 +741,16 @@
       (db:delete-object activity))
     (http-redirect (format nil "/project/view/~a"
                            (db:store-object-id project)))))
+
+
+(defun query->plist (qstring)
+  (when qstring
+    (loop :for kv :in (split-sequence:split-sequence #\& (urlencode:urldecode qstring))
+          :appending (destructuring-bind (k v) (split-sequence:split-sequence #\= kv)
+                       (list (make-keyword k) v)))))
+
+(defun query-plist ()
+  (query->plist (getf *req* :query-string)))
+
+(defroute :get "/stats"
+  (http-ok "text/html" (page/stats)))
