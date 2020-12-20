@@ -396,6 +396,15 @@
       :grid-template-columns "3fr 1fr 1fr 1fr 3fr"
       )
 
+
+     (.timesheet-entry
+      :margin-top 5px
+      :border-bottom 1px dotted #(primary-color)
+      :display grid
+      :width 100%
+      :grid-template-columns "2fr 1fr 1fr"
+      )
+     
      ((:and .activity :hover)
       :background-color #(medium) )
 
@@ -633,18 +642,29 @@
       (:form
        :method "GET" :action "/stats"
        (:label :for "start-date" "Days between ")
-       (:input :class "form-input" :name "start-date" :type "date" )
+       (:input :class "form-input" :name "start-date" :type "date"
+               :value (when query (getf query :start-date)))
        (:label :for "end-date" " and " )
-       (:input :class "form-input" :name "end-date"  :type "date" )
+       (:input :class "form-input" :name "end-date"  :type "date"
+               :value (when query (getf query :end-date)))
        (:button :type "submit" :class "button" "View")))
      (when query
+       (:div :class "timesheet-entry tertiary-color"
+              (:span "PROJECT") (:span "HOURS") (:span))
        (let ((start (local-datestring->utc (getf query :start-date)))
-             (stop (local-datestring->utc (getf query :end-date))))
+             (stop (local-datestring->utc (getf query :end-date)))
+             (total-seconds 0))
          (dolist (proj (all-projects))
            (let ((seconds (project-time proj :start start :stop stop)))
+             (incf total-seconds seconds)
              (when (plusp seconds)
-               (:p
-                (project-name proj) " "  (hours-minutes-string seconds)))))))
+               (:div
+                :class "timesheet-entry"
+                (:span (project-name proj))
+                (:span  (hours-minutes-string seconds))
+                (:span)))))
+         (:div :class "timesheet-entry tertiary-color"
+               (:span "TOTAL") (:span (hours-minutes-string total-seconds) (:span)))))
      )))
 
 
