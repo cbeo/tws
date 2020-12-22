@@ -256,14 +256,14 @@
   (db:store-object-touch (activity-project activity)))
 
 (defun stop-working (activity)
-  (assert (eql  activity *current-activity*))
-  (push (make-instance 'time-span
-                       :start (currently-working-p activity)
-                       :stop (get-universal-time))
-        (activity-log activity))
-  (setf (currently-working-p activity) nil)
-  (db:store-object-touch (activity-project activity))
-  (setf *current-activity* nil))
+  (when (eql activity *current-activity*)
+    (push (make-instance 'time-span
+                         :start (currently-working-p activity)
+                         :stop (get-universal-time))
+          (activity-log activity))
+    (setf (currently-working-p activity) nil)
+    (db:store-object-touch (activity-project activity))
+    (setf *current-activity* nil)))
 
 (defun seconds-worked (activity &key start (stop (get-universal-time)))
   (let ((activities
@@ -572,22 +572,23 @@
       )
      (:br)
      (dolist (project (all-projects)) 
-       (:div
-        (:a :class "primary-color"
-         :href (format nil  "/project/view/~a" (db:store-object-id project))
-         (:h3  (project-name project)))
-        (:div :class "activity-title"
-              (:span "NAME")
-              (:span "CATEGORY")
-              (:span "ESTIMATE")
-              (:span "WORKED")
-              (:span ""))
-        (dolist (activity (activities-by-project project))
-          (if status
-              (when (eql status (activity-status activity))
-                (view/activity activity))
-              (view/activity activity))))
-       (:br)))))
+       (when-let (activities
+                  (remove-if-not (lambda (act) (or (not status)
+                                                   (eql status (activity-status act))))
+                                 (activities-by-project project))) 
+         (:div
+          (:a :class "primary-color"
+              :href (format nil  "/project/view/~a" (db:store-object-id project))
+              (:h3  (project-name project)))
+          (:div :class "activity-title"
+                (:span "NAME")
+                (:span "CATEGORY")
+                (:span "ESTIMATE")
+                (:span "WORKED")
+                (:span ""))
+          (dolist (activity activities)
+            (view/activity activity)))
+         (:br))))))
 
 (defview activity (activity)
   (with-slots (db::id name estimate currently-working-p category log) activity 
@@ -886,6 +887,8 @@
     (db:with-transaction ()
       (setf (activity-status activity)
             (make-keyword (getf *body* :status)))
+      (if (eql :DONE (activity-status activity))
+          (stop-working activity))
       (db:store-object-touch (activity-project activity)))
     (http-redirect (format nil "/project/view/~a"
                            (db:store-object-id
