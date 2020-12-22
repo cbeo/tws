@@ -345,6 +345,9 @@
      (.tertiary-color
       :color #(tertiary-color))
 
+     (.secondary-color
+      :color #(secondary-color))
+
      (h1
       :color #(primary-color)
       :font-size 2.5em)
@@ -466,6 +469,16 @@
      
      (.main-content
       :margin-left 20%)
+
+     (.checklist-grid
+      :list-style-type none
+
+      (li
+       :display block
+       :float left
+       :width 33%)
+
+      ) 
           
      (.main-grid
       :margin-top 1em
@@ -496,9 +509,9 @@
   (:div :class "nav"
         (:a :href "/" "Dashboard")
         " "
-        (:a :href "/config" "Config")
+        (:a :href "/stats" "Stats")
         " "
-        (:a :href "/stats" "Stats")))
+        (:a :href "/config" "Config")))
 
 
 (defpage dashboard () (:title "TWS - DASHBOARD"
@@ -511,6 +524,9 @@
     (:a :class "button"
         :href "/project/add"
         "Add Project")
+    (:a :class "button"
+        :href "/activities/view?status=TODO"
+        "Overview")
     (:div :class "main-grid"
           (dolist (project (all-projects))
             (view/project-dashboard project))))))
@@ -531,6 +547,47 @@
     (:br)
     (:button :type "submit" :class "button"
              "Create Project"))))
+
+(defpage activities () (:title "TWS - Activities"
+                        :stylesheets ("/css/main.css"))
+  (view/nav)
+  (let* ((query (query-plist))
+         (status (when-let (stat-string (getf query :status))
+                   (make-keyword stat-string))))
+    (:div
+     :class "main-content"
+     (:h2 :class "tertiary-color"
+          "OVERVIEW" (when status (:span :class "primary-color" " - " status)))
+
+     (:div
+      (:strong "View By")
+      (:a :class "button" :href "/activities/view?status=TODO"
+          "TODO")
+      (:a :class "button" :href "/activities/view?status=BACKLOG"
+          "BACKLOG")
+      (:a :class "button" :href "/activities/view?status=DONE"
+          "DONE")
+      (:a :class "button" :href "/activities/view"
+          "View All")
+      )
+     (:br)
+     (dolist (project (all-projects)) 
+       (:div
+        (:a :class "primary-color"
+         :href (format nil  "/project/view/~a" (db:store-object-id project))
+         (:h3  (project-name project)))
+        (:div :class "activity-title"
+              (:span "NAME")
+              (:span "CATEGORY")
+              (:span "ESTIMATE")
+              (:span "WORKED")
+              (:span ""))
+        (dolist (activity (activities-by-project project))
+          (if status
+              (when (eql status (activity-status activity))
+                (view/activity activity))
+              (view/activity activity))))
+       (:br)))))
 
 (defview activity (activity)
   (with-slots (db::id name estimate currently-working-p category log) activity 
@@ -718,13 +775,14 @@
        (:input :class "form-input" :name "end-date"  :type "date"
                :value (when query (getf query :end-date)))
        (:br)
-       (:div 
+       (:ul :class "checklist-grid"
         (dolist (proj (all-projects))
-          (:input :type "checkbox" :value (format nil "~a" (db:store-object-id proj))
-                  :checked (member (db:store-object-id proj) project-ids)
-                  :name "projects"
-                  :class "project-checkbox"
-                  (project-name proj))))
+          (:li 
+           (:input :type "checkbox" :value (format nil "~a" (db:store-object-id proj))
+                   :checked (member (db:store-object-id proj) project-ids)
+                   :name "projects"
+                   :class "project-checkbox"
+                   (project-name proj)))))
        (:br)
        (:button :type "submit" :class "button" "View")))
 
@@ -854,3 +912,7 @@
 
 (defroute :get "/stats"
   (http-ok "text/html" (page/stats)))
+
+
+(defroute :get "/activities/view"
+  (http-ok "text/html" (page/activities)))
