@@ -702,7 +702,11 @@
                         (datestring-start-of-month)
                         (datestring-end-of-month))
           :class "button"
-          "This Month"))
+          "This Month")
+      (:a :href "/stats/"
+          :class "button"
+          "All Time"))
+     
      (:br)
      (:div 
       (:form
@@ -724,25 +728,24 @@
        (:br)
        (:button :type "submit" :class "button" "View")))
 
-     (when query
+     (:div :class "timesheet-entry tertiary-color"
+           (:span "PROJECT") (:span "HOURS") (:span))
+     (let ((start (and query  (local-datestring->utc (getf query :start-date))))
+           (stop  (and query (local-datestring->utc (getf query :end-date) :end-of-day t)))
+           (total-seconds 0))
+       (dolist (proj (if project-ids (get-projects project-ids) (all-projects)))
+         (let ((seconds (project-time proj :start start :stop stop)))
+           (incf total-seconds seconds)
+           (when (plusp seconds)
+             (:div
+              :class "timesheet-entry"
+              (:span (project-name proj))
+              (:span  (hours-minutes-string seconds))
+              (:span)))))
        (:div :class "timesheet-entry tertiary-color"
-              (:span "PROJECT") (:span "HOURS") (:span))
-       (let ((start (local-datestring->utc (getf query :start-date)))
-             (stop (local-datestring->utc (getf query :end-date) :end-of-day t))
-             (total-seconds 0))
-         (dolist (proj (if project-ids (get-projects project-ids) (all-projects)))
-           (let ((seconds (project-time proj :start start :stop stop)))
-             (incf total-seconds seconds)
-             (when (plusp seconds)
-               (:div
-                :class "timesheet-entry"
-                (:span (project-name proj))
-                (:span  (hours-minutes-string seconds))
-                (:span)))))
-         (:div :class "timesheet-entry tertiary-color"
-               (:span "TOTAL")
-               (:span (hours-minutes-string total-seconds))
-               (:span)))))))
+             (:span "TOTAL")
+             (:span (hours-minutes-string total-seconds))
+             (:span))))))
 
 
 ;;; ROUTES
