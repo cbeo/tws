@@ -809,6 +809,9 @@
 
 ;;; ROUTES
 
+(defun redirect-to-referrer ()
+  (http-redirect (gethash "referer" (getf *req* :headers))))
+
 (defroute :get "/css/main.css"
   (http-ok "text/css"
            (main-css)))
@@ -865,24 +868,23 @@
                      :estimate (parse-float:parse-float (getf *body* :estimate))
                      :category (getf *body* :category))
       (db:store-object-touch project)))
-  (http-redirect (format nil "/project/view/~a" projectid)))
+  (redirect-to-referrer))
 
 (defroute :get "/activity/clock-in/:id"
   (let ((activity (db:store-object-with-id (parse-integer id))))
     (db:with-transaction ()  (start-working activity))    
-    (http-redirect (format nil "/project/view/~a"
-                           (db:store-object-id
-                            (activity-project activity))))))
+    (redirect-to-referrer)))
 
 (defroute :get "/activity/clock-out/:id"
   (let ((activity (db:store-object-with-id (parse-integer id))))
     (db:with-transaction ()  (stop-working activity))
-    (http-redirect (format nil "/project/view/~a"
-                           (db:store-object-id
-                            (activity-project activity))))))
+    (redirect-to-referrer)))
 
 
 (defroute :post "/activity/status/:id"
+  (format t "~s~%" *req*)
+  (maphash (lambda (k v) (format t "~s : ~s~%" k v)) (getf *req* :headers))
+
   (let ((activity (db:store-object-with-id (parse-integer id))))
     (db:with-transaction ()
       (setf (activity-status activity)
@@ -890,9 +892,7 @@
       (if (eql :DONE (activity-status activity))
           (stop-working activity))
       (db:store-object-touch (activity-project activity)))
-    (http-redirect (format nil "/project/view/~a"
-                           (db:store-object-id
-                            (activity-project activity))))))
+    (redirect-to-referrer)))
 
 (defroute :get "/activity/delete/:id"
   (let* ((activity (db:store-object-with-id (parse-integer id)))
@@ -900,8 +900,7 @@
     (db:with-transaction ()
       (db:store-object-touch project)
       (db:delete-object activity))
-    (http-redirect (format nil "/project/view/~a"
-                           (db:store-object-id project)))))
+    (redirect-to-referrer)))
 
 
 (defun query->plist (qstring)
