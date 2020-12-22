@@ -509,6 +509,10 @@
   (:div :class "nav"
         (:a :href "/" "Dashboard")
         " "
+        (:a 
+         :href "/activities/view?status=TODO"
+         "Overview")
+        " "
         (:a :href "/stats" "Stats")
         " "
         (:a :href "/config" "Config")))
@@ -524,9 +528,7 @@
     (:a :class "button"
         :href "/project/add"
         "Add Project")
-    (:a :class "button"
-        :href "/activities/view?status=TODO"
-        "Overview")
+
     (:div :class "main-grid"
           (dolist (project (all-projects))
             (view/project-dashboard project))))))
