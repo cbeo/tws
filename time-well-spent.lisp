@@ -59,10 +59,39 @@
 
 ;;; Utilities
 
-(defun local-datestring->utc (datestring)
-  (local-time:timestamp-to-universal
-   (local-time:parse-timestring
-    (format nil "~aT00:00:00.000000-06:00" datestring))))
+(defun local-datestring->utc (datestring &key end-of-day)
+  (lt:timestamp-to-universal
+   (lt:parse-timestring
+    (format nil "~aT~a-06:00"
+            datestring
+            (if end-of-day
+                "23:59:59.000000"
+                "00:00:00.000000")))))
+
+
+(defun datestring (timestamp)
+  (lt:format-timestring nil timestamp
+                                :format '(:year "-" :month "-" :day)))
+
+(defun datestring-today ()
+  (datestring (lt:now)))
+
+(defun datestring-start-of-week  ()
+  (let ((now (lt:now)))
+    (datestring (lt:timestamp- now (lt:timestamp-day-of-week now) :day))))
+
+(defun datestring-end-of-week ()
+  (let ((now (lt:now)))
+    (datestring (lt:timestamp+ now (- 6 (lt:timestamp-day-of-week now)) :day ))))
+
+(defun datestring-start-of-month ()
+  (let ((now (lt:now)))
+    (datestring (lt:timestamp- now (1- (lt:timestamp-day now)) :day))))
+
+(defun datestring-end-of-month ()
+  (let ((this-time-next-month (lt:timestamp+ (lt:now) 1 :month)))
+    (datestring
+     (lt:timestamp- this-time-next-month (lt:timestamp-day this-time-next-month) :day))))
 
 (defun remove-nth (n ls)
   (cond ((= n 0) (cdr ls))
@@ -323,8 +352,8 @@
       :border-radius #(radius-low)
       :text-decoration none
       :text-align center
-      :margin-top 4px
-      :margin-bottom 4px
+
+      :margin 4px
       :padding #(padding-low))
 
      ((:and .button :hover)
@@ -639,6 +668,22 @@
      :class "main-content"
      (:h1 "Stats")
      (:div 
+      (:a :href (format nil "/stats/?start-date=~a&end-date=~a"
+                        (datestring-today) (datestring-today))
+          :class "button"
+          "Today")
+      (:a :href (format nil "/stats/?start-date=~a&end-date=~a"
+                        (datestring-start-of-week)
+                        (datestring-end-of-week))
+          :class "button"
+          "This Week")
+      (:a :href (format nil "/stats/?start-date=~a&end-date=~a"
+                        (datestring-start-of-month)
+                        (datestring-end-of-month))
+          :class "button"
+          "This Month"))
+     (:br)
+     (:div 
       (:form
        :method "GET" :action "/stats"
        (:label :for "start-date" "Days between ")
@@ -648,11 +693,13 @@
        (:input :class "form-input" :name "end-date"  :type "date"
                :value (when query (getf query :end-date)))
        (:button :type "submit" :class "button" "View")))
+     
+
      (when query
        (:div :class "timesheet-entry tertiary-color"
               (:span "PROJECT") (:span "HOURS") (:span))
        (let ((start (local-datestring->utc (getf query :start-date)))
-             (stop (local-datestring->utc (getf query :end-date)))
+             (stop (local-datestring->utc (getf query :end-date) :end-of-day t))
              (total-seconds 0))
          (dolist (proj (all-projects))
            (let ((seconds (project-time proj :start start :stop stop)))
@@ -664,7 +711,9 @@
                 (:span  (hours-minutes-string seconds))
                 (:span)))))
          (:div :class "timesheet-entry tertiary-color"
-               (:span "TOTAL") (:span (hours-minutes-string total-seconds) (:span)))))
+               (:span "TOTAL")
+               (:span (hours-minutes-string total-seconds))
+               (:span))))
      )))
 
 
