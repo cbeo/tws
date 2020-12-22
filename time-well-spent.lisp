@@ -180,6 +180,10 @@
           :key (lambda (activity)
                  (seconds-worked activity :start start :stop stop))))
 
+(defun get-projects (ids)
+  "IDS is a list of ids"
+  (mapcar 'db:store-object-with-id ids))
+
 (defun all-projects ()
   (sort (copy-seq (db:store-objects-with-class 'project))
         #'>
@@ -676,7 +680,10 @@
 
 (defpage stats () (:title "TWS - Stats"
                    :stylesheets ("/css/main.css"))
-  (let ((query (query-plist)))
+  (let* ((query (query-plist))
+         (project-ids (loop :for (k v . more) :on query :by #'cddr
+                         :when (eql :projects k)
+                           :collect (parse-integer v))))
     (view/nav)
     (:div
      :class "main-content"
@@ -706,8 +713,16 @@
        (:label :for "end-date" " and " )
        (:input :class "form-input" :name "end-date"  :type "date"
                :value (when query (getf query :end-date)))
+       (:br)
+       (:div 
+        (dolist (proj (all-projects))
+          (:input :type "checkbox" :value (format nil "~a" (db:store-object-id proj))
+                  :checked (member (db:store-object-id proj) project-ids)
+                  :name "projects"
+                  :class "project-checkbox"
+                  (project-name proj))))
+       (:br)
        (:button :type "submit" :class "button" "View")))
-     
 
      (when query
        (:div :class "timesheet-entry tertiary-color"
@@ -715,7 +730,7 @@
        (let ((start (local-datestring->utc (getf query :start-date)))
              (stop (local-datestring->utc (getf query :end-date) :end-of-day t))
              (total-seconds 0))
-         (dolist (proj (all-projects))
+         (dolist (proj (if project-ids (get-projects project-ids) (all-projects)))
            (let ((seconds (project-time proj :start start :stop stop)))
              (incf total-seconds seconds)
              (when (plusp seconds)
@@ -727,8 +742,7 @@
          (:div :class "timesheet-entry tertiary-color"
                (:span "TOTAL")
                (:span (hours-minutes-string total-seconds))
-               (:span))))
-     )))
+               (:span)))))))
 
 
 ;;; ROUTES
