@@ -70,8 +70,22 @@
 
 
 (defun datestring (timestamp)
-  (lt:format-timestring nil timestamp
-                                :format '(:year "-" :month "-" :day)))
+  (let* ((month-portion
+           (if (< (lt:timestamp-month timestamp) 10)
+               '( "0" :month)
+               '(:month)))
+
+         (day-portion
+           (if (< (lt:timestamp-day timestamp) 10)
+               '("0" :day)
+               '(:day)))
+
+         (format
+           (append '(:year)
+                   (cons "-" month-portion)
+                   (cons "-" day-portion))))
+    (lt:format-timestring nil timestamp
+                          :format format )))
 
 (defun datestring-today ()
   (datestring (lt:now)))
