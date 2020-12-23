@@ -425,6 +425,11 @@
      (.unstyled
       :list-style-type none)
 
+     (.hidden
+      :visibility hidden
+      :height 0
+      :widht 0)
+
      (a
       ((:and .card :hover)
        :transform "rotate(-0.003turn)"))
@@ -672,6 +677,18 @@
        (:span :class "tertiary-color" (hours-minutes-string (project-time project))))
    (:p (project-description project))
 
+   (:button :class "button" :id (format nil "delete-project-button")
+            "Delete Project")
+   (:form
+    :id "delete-project-form"
+    :class "hidden"
+    :method "POST"
+    :action (format nil "/project/delete/~a" (db:store-object-id project))
+    (:p "Are you sure you want to delete this project?")
+    (:input :name "ignore" :value "Ignore Me" :class "hidden")
+    (:br)
+    (:button :class "button" :type "submit" "Comfirm & Delete"))
+
    (:div
     (:div :class "activity-title"
           (:span "NAME")
@@ -680,7 +697,19 @@
           (:span "WORKED")
           (:span ""))
     (dolist (activity (sort-activities  (activities-by-project project)))
-      (view/activity activity)))))
+      (view/activity activity))))
+  (:script
+   (ps:ps
+     (ps:chain
+      document
+      (get-element-by-id  "delete-project-button")
+      (add-event-listener 
+       "click"
+       (lambda (event)
+         (ps:chain document (get-element-by-id "delete-project-form")
+                   class-list
+                   (remove "hidden"))
+         (ps:chain event target class-list (add "hidden"))))))))
 
 
 (defview categories-list (categories)
@@ -920,3 +949,13 @@
 
 (defroute :get "/activities/view"
   (http-ok "text/html" (page/activities)))
+
+(defroute :post "/project/delete/:project-id"
+  (when-let (project (db:store-object-with-id (parse-integer project-id)))
+    (db:with-transaction ()
+      (dolist (activity (activities-by-project project))
+        (dolist (span (activity-log activity))
+          (db:delete-object span))
+        (db:delete-object activity))
+      (db:delete-object project)))
+  (http-redirect "/"))
