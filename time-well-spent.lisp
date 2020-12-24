@@ -68,8 +68,10 @@
                 "23:59:59.000000"
                 "00:00:00.000000")))))
 
+(defun utc->timestring (utc)
+  (datestring (lt:universal-to-timestamp utc) t))
 
-(defun datestring (timestamp)
+(defun datestring (timestamp &optional include-time-p)
   (let* ((month-portion
            (if (< (lt:timestamp-month timestamp) 10)
                '( "0" :month)
@@ -83,9 +85,15 @@
          (format
            (append '(:year)
                    (cons "-" month-portion)
-                   (cons "-" day-portion))))
+                   (cons "-" day-portion)
+                   (when include-time-p
+                     (list " " :hour ":" :min)))))
     (lt:format-timestring nil timestamp
                           :format format )))
+
+(defun utc->datestring (utc)
+  (datestring (lt:universal-to-timestamp utc)))
+
 
 (defun datestring-today ()
   (datestring (lt:now)))
@@ -423,7 +431,8 @@
       :background-color #(medium))
 
      (.unstyled
-      :list-style-type none)
+      :list-style-type none
+      (li :margin 6px))
 
      (.hidden
       :visibility hidden
@@ -609,6 +618,34 @@
               "00:00"))
      (:div :class "inline" (view/activity-controls activity)))))
 
+(defpage activity (activity) (:stylesheets ("/css/main.css"))
+    (with-slots (db::id log name) activity
+      (view/nav)
+      (:div :class "main-content"
+            (:h2 name)
+            (:p 
+             (:a
+              :class "tertiary-color"
+              :href (format nil "/project/view/~a"
+                            (db:store-object-id
+                             (activity-project activity)))
+              "back to " (project-name (activity-project activity))))
+            (:br) (:br)
+            (:a :class "button"
+                :href (format nil "/activity/delete/~a" db::id)
+                "Delete This Activity")
+            (:h4 "Log ")
+            (:ul :class "unstyled"
+                 (dolist (span log)
+                   (:li
+                    (:a :class "button"
+                            :href (format nil  "/span/delete/~a" (db:store-object-id span))
+                            " ❌ ")
+                    (:span  (utc->timestring (start-time span)) " -- "
+                            (utc->timestring (stop-time span)))
+                    " "))))))
+
+
 (defview activity-controls (activity)
   (with-slots (db::id name currently-working-p status log) activity
     (let ((status-id (format nil "status-~a" db::id))
@@ -626,11 +663,12 @@
              (:select :name "status" :class "button" :id status-id
                (dolist (s (statuses (get-config)))
                  (if (eql s status)
-                     (:option :value s :selected "true" s)
+                     (:option  :value s :selected "true" s)
                      (:option :value s s)))))
-      (:a :class "button"
-          :href (format nil "/activity/delete/~a" db::id)
-          "❌")
+      
+      (:a :class "tertiary-color"
+          :href (format nil "/activity/view/~a" db::id)
+          "view")
       (:script
        :type "text/javascript"
        (ps:ps
@@ -690,14 +728,35 @@
     (:button :class "button" :type "submit" "Comfirm & Delete"))
 
    (:div
+    (let ((id (db:store-object-id project)))
+      (:div
+       (:strong "View By")
+       (:a :class "button"
+           :href (format nil "/project/view/~a?status=TODO" id)
+           "TODO")
+       (:a :class "button"
+           :href (format nil "/project/view/~a?status=BACKLOG" id)
+           "BACKLOG")
+       (:a :class "button"
+           :href (format nil "/project/view/~a?status=DONE" id)
+           "DONE")
+       (:a :class "button"
+           :href (format nil  "/project/view/~a" id)
+           "View All")))
     (:div :class "activity-title"
           (:span "NAME")
           (:span "CATEGORY")
           (:span "ESTIMATE")
           (:span "WORKED")
           (:span ""))
-    (dolist (activity (sort-activities  (activities-by-project project)))
-      (view/activity activity))))
+    (let* ((status
+             (when-let (stat-string (getf (query-plist) :status))
+               (make-keyword stat-string))))
+      (dolist (activity (sort-activities  (activities-by-project project)))
+        (if status 
+            (when (eql status (activity-status activity))
+              (view/activity activity))
+            (view/activity activity))))))
   (:script
    (ps:ps
      (ps:chain
@@ -913,9 +972,6 @@
 
 
 (defroute :post "/activity/status/:id"
-  (format t "~s~%" *req*)
-  (maphash (lambda (k v) (format t "~s : ~s~%" k v)) (getf *req* :headers))
-
   (let ((activity (db:store-object-with-id (parse-integer id))))
     (db:with-transaction ()
       (setf (activity-status activity)
@@ -930,6 +986,8 @@
          (project  (activity-project activity)))
     (db:with-transaction ()
       (db:store-object-touch project)
+      (dolist (span (activity-log activity))
+        (db:delete-object span))
       (db:delete-object activity))
     (redirect-to-referrer)))
 
@@ -959,3 +1017,18 @@
         (db:delete-object activity))
       (db:delete-object project)))
   (http-redirect "/"))
+
+(defroute :get "/activity/view/:act-id"
+  (http-ok "text/html"
+           (page/activity
+            (db:store-object-with-id
+             (parse-integer act-id)))))
+
+(defroute :get "/span/delete/:act-id/:sp-id"
+  (when-let (span (db:store-object-with-id (parse-integer sp-id)))
+    (when-let (activity (db:store-object-with-id (parse-integer act-id)))
+      (db:with-transaction ()
+        (setf (activity-log activity)
+              (remove span (activity-log activity)))
+        (db:delete-object span))))
+  (redirect-to-referrer))
