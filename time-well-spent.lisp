@@ -989,7 +989,7 @@
       (dolist (span (activity-log activity))
         (db:delete-object span))
       (db:delete-object activity))
-    (redirect-to-referrer)))
+    (http-redirect (format nil "/project/view/~a" (db:store-object-id project)))))
 
 
 (defun query->plist (qstring)
