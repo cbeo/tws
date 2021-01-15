@@ -35,6 +35,9 @@
     (db:with-transaction ()
       (make-instance 'config)))
   (initialize-current-activity)
+
+  (bt:make-thread (lambda () (swank:create-server :port 4010 :dont-close t)))
+
   (lzb:start))
 
 (defun help-menu ()
@@ -224,6 +227,10 @@
     :accessor activity-name
     :initarg :name
     :initform (error "Activity Name Required"))
+   (description
+    :accessor activity-description
+    :initarg :description
+    :initform "")
    (estimate
     :accessor activity-estimate
     :initarg :estimate
@@ -619,17 +626,29 @@
      (:div :class "inline" (view/activity-controls activity)))))
 
 (defpage activity (activity) (:stylesheets ("/css/main.css"))
-    (with-slots (db::id log name) activity
+    (with-slots (db::id log name description) activity
       (view/nav)
       (:div :class "main-content"
-            (:h2 name)
             (:p 
              (:a
               :class "tertiary-color"
               :href (format nil "/project/view/~a"
                             (db:store-object-id
                              (activity-project activity)))
-              "back to " (project-name (activity-project activity))))
+              " ⮪ back to " (project-name (activity-project activity))))
+
+            (:form
+             :action (format nil "/activity/update/~a" db::id)
+             :method "POST"
+             (:input :value name :name "name" :class "form-input")
+             (:label :for "name" "Name")
+             (:br)
+             (:textarea :name "description" :rows 5 :cols 60 :class "form-input"
+                        description)
+             (:label :for "description" "Description")
+             (:br)
+             (:button :type "submit" :class "button" "Update"))
+            
             (:br) (:br)
             (:a :class "button"
                 :href (format nil "/activity/delete/~a" db::id)
@@ -1032,3 +1051,11 @@
               (remove span (activity-log activity)))
         (db:delete-object span))))
   (redirect-to-referrer))
+
+(defroute :post "/activity/update/:id"
+  (if-let (activity (db:store-object-with-id (parse-integer id)))
+    (progn (db:with-transaction ()
+             (setf (activity-name activity) (getf *body* :name)
+                   (activity-description  activity) (getf *body* :description)))
+           (http-redirect (format nil "/activity/view/~a" id)))
+    (http-err 404 "Activity not found")))

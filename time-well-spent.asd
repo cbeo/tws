@@ -13,6 +13,8 @@
                #:spinneret
                #:jonathan
                #:trivia
+               #:bordeaux-threads
+               #:swank
                #:parenscript)
   :components ((:file "package")
                (:file "time-well-spent")))
