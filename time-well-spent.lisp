@@ -658,7 +658,9 @@
                  (dolist (span log)
                    (:li
                     (:a :class "button"
-                            :href (format nil  "/span/delete/~a" (db:store-object-id span))
+                        :href (format nil "/span/delete/~a/~a"
+                                      db::id
+                                      (db:store-object-id span))
                             " ❌ ")
                     (:span  (utc->timestring (start-time span)) " -- "
                             (utc->timestring (stop-time span)))
