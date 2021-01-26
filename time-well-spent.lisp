@@ -254,7 +254,7 @@
    (status 
     :accessor activity-status
     :initarg :status
-    :initform :backlog)
+    :initform :todo)
    (category
     :accessor activity-category
     :initarg :category
