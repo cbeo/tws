@@ -544,7 +544,7 @@
   (view/nav)
   (:div
    :class "main-content"
-   (:h1 "time well spent")
+   (:h1 "PROJECTS")
    (:div
     (:a :class "button"
         :href "/project/add"
