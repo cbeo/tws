@@ -842,8 +842,8 @@
      (:h1 "Config")
      (view/categories-list categories)
      (view/add-category-form)
-     (view/statuses-list statuses)
-     (view/add-status-form))))
+     
+     )))
 
 
 
