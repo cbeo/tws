@@ -534,7 +534,9 @@
          :href "/activities/view?status=TODO"
          "Overview")
         " "
-        (:a :href "/stats" "Stats")
+        (:a :href (format nil "/stats/?start-date=~a&end-date=~a"
+                          (datestring-today) (datestring-today))
+            "Stats")
         " "
         (:a :href "/config" "Config")))
 
