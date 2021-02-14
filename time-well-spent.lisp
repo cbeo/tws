@@ -510,7 +510,7 @@
 
 (defview project-dashboard (project)
   (with-slots (db::id name description) project
-    (:a :href (format nil  "/project/view/~a" db::id)
+    (:a :href (format nil  "/project/view/~a?status=TODO" db::id)
         (:div :class (if (and *current-activity*
                               (eql project (activity-project *current-activity*)))
                          "project card primary-highlight"
