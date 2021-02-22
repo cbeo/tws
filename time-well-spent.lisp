@@ -182,7 +182,10 @@
    (description
     :accessor project-description
     :initarg :description
-    :initform ""))
+    :initform "")
+   (archived-p
+    :accessor project-archived-p
+    :initform nil))
   (:metaclass db:persistent-class))
 
 (defun project-time (project &key start (stop (get-universal-time)))
@@ -195,10 +198,17 @@
   "IDS is a list of ids"
   (mapcar 'db:store-object-with-id ids))
 
-(defun all-projects ()
-  (sort (copy-seq (db:store-objects-with-class 'project))
-        #'>
-        :key (lambda (o) (db:store-object-last-change o 1))))
+(defun all-projects (&key also-archived)
+  (sort
+   (copy-seq
+    (remove-if-not
+     
+     (if also-archived 'project-archived-p
+         (constantly t))
+     
+     (db:store-objects-with-class 'project)))
+   #'>
+   :key (lambda (o) (db:store-object-last-change o 1))))
 
 (defclass time-span (db:store-object)
   ((start-time
@@ -551,10 +561,22 @@
     (:a :class "button"
         :href "/project/add"
         "Add Project")
-
+    (:a :class "button"
+        :href "/archived"
+        "Archived Projects")
     (:div :class "main-grid"
           (dolist (project (all-projects))
             (view/project-dashboard project))))))
+
+(defpage archived () (:title "Archived Projects"
+                      :stylesheets ("/css/main.css"))
+  (view/nav)
+  (:div
+   :class "main-content"
+   (:h1 "ARCHIVED PROJECTS")
+   (:div :class "main-grid"
+         (dolist (project (all-projects :also-archived t))
+           (view/project-dashboard project)))))
 
 (defpage new-project () (:title "New Project"
                          :stylesheets ("/css/main.css"))
@@ -740,6 +762,16 @@
 
    (:button :class "button" :id (format nil "delete-project-button")
             "Delete Project")
+
+   (if (project-archived-p project)
+       (:a :class "button"
+           :href (format nil "/project/unarchive/~a" (db:store-object-id project))
+           "Unarchive Project")
+       (:a :class "button"
+           :href (format nil "/project/archive/~a" (db:store-object-id project))
+           "Archive Project"))
+
+
    (:form
     :id "delete-project-form"
     :class "hidden"
@@ -843,9 +875,7 @@
      :class "main-content"
      (:h1 "Config")
      (view/categories-list categories)
-     (view/add-category-form)
-     
-     )))
+     (view/add-category-form))))
 
 
 
@@ -1063,3 +1093,20 @@
                    (activity-description  activity) (getf *body* :description)))
            (http-redirect (format nil "/activity/view/~a" id)))
     (http-err 404 "Activity not found")))
+
+(defroute :get "/project/archive/:id"
+  (if-let (project (db:store-object-with-id (parse-integer id)))
+    (progn (db:with-transaction ()
+             (setf (project-archived-p project) t))
+           (http-redirect "/"))
+    (http-err 404 "Project not found")))
+
+(defroute :get "/project/unarchive/:id"
+  (if-let (project (db:store-object-with-id (parse-integer id)))
+    (progn (db:with-transaction ()
+             (setf (project-archived-p project) nil))
+           (http-redirect "/archived"))
+    (http-err 404 "Project not found"))  )
+
+(defroute :get "/archived"
+  (http-ok "text/html" (page/archived)))
