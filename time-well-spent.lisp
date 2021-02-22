@@ -198,14 +198,11 @@
   "IDS is a list of ids"
   (mapcar 'db:store-object-with-id ids))
 
-(defun all-projects (&key also-archived)
+(defun all-projects (&key archived-p)
   (sort
    (copy-seq
     (remove-if-not
-     
-     (if also-archived 'project-archived-p
-         (constantly t))
-     
+     (lambda (project) (eql archived-p (project-archived-p project)))     
      (db:store-objects-with-class 'project)))
    #'>
    :key (lambda (o) (db:store-object-last-change o 1))))
@@ -575,7 +572,7 @@
    :class "main-content"
    (:h1 "ARCHIVED PROJECTS")
    (:div :class "main-grid"
-         (dolist (project (all-projects :also-archived t))
+         (dolist (project (all-projects :archived-p t))
            (view/project-dashboard project)))))
 
 (defpage new-project () (:title "New Project"
