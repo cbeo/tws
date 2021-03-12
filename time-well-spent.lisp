@@ -283,14 +283,16 @@
                           (activities-by-category (activity-category activity))))
          (space-size (length space))
          (sum 0)
+         (worked-sofar (/  (seconds-worked activity) 3600))
          (estimate (activity-estimate activity)))
-    (if (plusp space-size)
-      (dotimes (i samples (/ sum samples))
-        (incf sum
-              (* estimate 
-                 (estimate-ratio
-                  (elt space (random space-size))))))
-      estimate)))
+    (- (if (plusp space-size)
+           (dotimes (i samples (/ sum samples))
+             (incf sum
+                   (* estimate 
+                      (estimate-ratio
+                       (elt space (random space-size))))))
+           estimate)
+       worked-sofar)))
 
 (defun todo-p (activity)
   (eql :todo (activity-status activity)))
