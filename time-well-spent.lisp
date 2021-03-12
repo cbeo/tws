@@ -165,7 +165,6 @@
 (defun add-category (config category)
   (pushnew category (categories config)))
 
-
 (defun remove-category (config index)
   (setf (categories config)
         (remove-nth index (categories config))))
@@ -266,8 +265,56 @@
    (category
     :accessor activity-category
     :initarg :category
-    :initform nil))
+    :initform nil
+    :index-type bknr.indices:hash-index
+    :index-initargs (:test 'equal)
+    :index-reader activities-by-category))
   (:metaclass db:persistent-class))
+
+(defun estimate-ratio (activity)
+  (/ (seconds-worked activity) (* (activity-estimate activity) 60 60)))
+
+(defun done-p (activity)
+  (eql :done (activity-status activity)))
+
+(defun monte-carlo-estimate-for-activity (activity &key (samples 100))
+  (let* ((space
+           (remove-if-not 'done-p
+                          (activities-by-category (activity-category activity))))
+         (space-size (length space))
+         (sum 0)
+         (estimate (activity-estimate activity)))
+    (if (plusp space-size)
+      (dotimes (i samples (/ sum samples))
+        (incf sum
+              (* estimate 
+                 (estimate-ratio
+                  (elt space (random space-size))))))
+      0)))
+
+
+(defun todo-p (activity)
+  (eql :todo (activity-status activity)))
+
+(defun monte-carlo-estimate-for-project (project &key (samples 100))
+  (loop
+    :for a :in (activities-by-project project)
+    :when (todo-p a)
+      :summing (monte-carlo-estimate-for-activity a :samples samples)))
+
+(defun project-estimate-range (project &key (samples 100) (simulations 10))
+  (loop
+    :with sum = 0
+    :with min-time = nil
+    :with max-time = nil
+    :for i :upto simulations
+    :for estimate = (monte-carlo-estimate-for-project project :samples samples)
+    :do
+       (incf sum estimate)
+       (setf max-time (if (null max-time) estimate (max estimate max-time))
+             min-time (if (null min-time) estimate (min estimate min-time)))
+    :finally
+       (return (list :min min-time :average (/ sum simulations) :max max-time))))
 
 (defun start-working (activity)
   (when *current-activity*
@@ -518,6 +565,7 @@
 
 (defview project-dashboard (project)
   (with-slots (db::id name description) project
+
     (:a :href (format nil  "/project/view/~a?status=TODO" db::id)
         (:div :class (if (and *current-activity*
                               (eql project (activity-project *current-activity*)))
@@ -530,9 +578,23 @@
                     (:span :class "primary-color" (activity-name *current-activity*))))
               (:p "Total Time:"
                   (:span :class "tertiary-color" (hours-minutes-string (project-time project))))
+              (:h4 "Estimated Work Left")
+              (view/project-estimate project)
               (:p description)
               
               ))))
+
+(defview project-estimate (project)
+  (let ((prediction (project-estimate-range project :simulations 100)))
+    (:ul :class "unstyled"
+         (:li :class "tertiary-color"
+              (format nil "Between ~a and ~a"
+                      (hours-minutes-string  (* 60 60  (getf prediction :min)))
+                      (hours-minutes-string (* 60 60 (getf prediction :max)))))
+         (:li :class "tertiary-color"
+              (format nil "Average ~a"
+                      (hours-minutes-string (* 60 60 (getf prediction :average))))))))
+
 
 (defview nav ()
   (:div :class "nav"
@@ -756,6 +818,8 @@
    (:h1 (project-name project))
    (:p "Total Time: "
        (:span :class "tertiary-color" (hours-minutes-string (project-time project))))
+   (:p "Estimated Time To Completion: ")
+   (view/project-estimate project)
    (:p (project-description project))
 
    (:button :class "button" :id (format nil "delete-project-button")
