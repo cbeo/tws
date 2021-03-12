@@ -290,8 +290,7 @@
               (* estimate 
                  (estimate-ratio
                   (elt space (random space-size))))))
-      0)))
-
+      estimate)))
 
 (defun todo-p (activity)
   (eql :todo (activity-status activity)))
@@ -580,9 +579,7 @@
                   (:span :class "tertiary-color" (hours-minutes-string (project-time project))))
               (:h4 "Estimated Work Left")
               (view/project-estimate project)
-              (:p description)
-              
-              ))))
+              (:p description)))))
 
 (defview project-estimate (project)
   (let ((prediction (project-estimate-range project :simulations 100)))
