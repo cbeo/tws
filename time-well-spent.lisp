@@ -362,8 +362,34 @@
    (< (db:store-object-last-change a 2)
       (db:store-object-last-change b 2))))
 
-(defun sort-activities (activities)
-  (sort (copy-seq activities) 'activity-before))
+(defun sort-activities (activities &key (by :order-added))
+  "BY is one of
+
+:ORDER-ADDED
+:CATEGORY 
+:WORKED
+:ESTIMATE
+:ALPHABETICAL
+
+ORDER-ADDED assumes low number store object id's are added before high
+number object ids."
+  (sort (copy-seq activities)
+        (case by
+          (:alphabetical
+           (lambda (a b)
+             (string< (activity-name a) (activity-name b))))
+          (:category
+           (lambda (a b)
+             (string< (activity-category a) (activity-category b))))
+          (:worked
+           (lambda (a b)
+             (> (seconds-worked a) (seconds-worked b))))
+          (:estimate
+           (lambda (a b)
+             (> (activity-estimate a) (activity-estimate b))))
+          (t (lambda (a b)
+               (< (db:store-object-id a)
+                  (db:store-object-id b)))))))
 
 ;;; Pages
 
@@ -832,7 +858,6 @@
            :href (format nil "/project/archive/~a" (db:store-object-id project))
            "Archive Project"))
 
-
    (:form
     :id "delete-project-form"
     :class "hidden"
@@ -844,7 +869,16 @@
     (:button :class "button" :type "submit" "Comfirm & Delete"))
 
    (:div
-    (let ((id (db:store-object-id project)))
+    (let* ((id
+             (db:store-object-id project))
+           (status
+             (when-let (stat-string (getf (query-plist) :status))
+               (make-keyword stat-string)))
+           (sort-by
+             (when-let (sort-string (getf (query-plist) :by))
+               (make-keyword sort-string)))
+           (activities
+             (sort-activities (activities-by-project project) :by sort-by)))
       (:div
        (:strong "View By")
        (:a :class "button"
@@ -858,17 +892,26 @@
            "DONE")
        (:a :class "button"
            :href (format nil  "/project/view/~a" id)
-           "View All")))
-    (:div :class "activity-title"
-          (:span "NAME")
-          (:span "CATEGORY")
-          (:span "ESTIMATE")
-          (:span "WORKED")
-          (:span ""))
-    (let* ((status
-             (when-let (stat-string (getf (query-plist) :status))
-               (make-keyword stat-string))))
-      (dolist (activity (sort-activities  (activities-by-project project)))
+           "View All"))
+      (:div :class "activity-title"
+            (:a :href (format nil "/project/view/~a?~@[status=~a&~]by=ALPHABETICAL"
+                              id status)
+                :class "tertiary-color"
+                "NAME")
+            (:a :href (format nil "/project/view/~a?~@[status=~a&~]by=CATEGORY"
+                              id status)
+                :class "tertiary-color"
+                "CATEGORY")
+            (:a :href (format nil "/project/view/~a?~@[status=~a&~]by=ESTIMATE"
+                              id status)
+                :class "tertiary-color"
+                "ESTIMATE")
+            (:a :href (format nil "/project/view/~a?~@[status=~a&~]by=WORKED"
+                              id status)
+                :class "tertiary-color"
+                "WORKED")
+            (:span ""))
+      (dolist (activity activities)
         (if status 
             (when (eql status (activity-status activity))
               (view/activity activity))
