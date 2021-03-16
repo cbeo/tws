@@ -193,6 +193,38 @@
           :key (lambda (activity)
                  (seconds-worked activity :start start :stop stop))))
 
+
+(defun project-started (project)
+  (let (min)
+    (dolist (act (activities-by-project project) min)
+      (dolist (span (activity-log act))
+        (setf min
+              (if (null min) (start-time span)
+                  (min min (start-time span))))))))
+
+(defun project-velocity (project)
+  "Returns average seconds worked per week. Only counts weeks where some work"
+  (when-let (started (project-started project))
+    (loop
+      :with start = (lt:universal-to-timestamp started )
+      :with now = (lt:now)
+      :with weeks = 0
+      :with total = 0.0
+      :while (lt:timestamp< start now)
+      :for weekly = (project-time project
+                                  :start (lt:timestamp-to-universal start)
+                                  :stop (lt:timestamp-to-universal
+                                         (lt:timestamp+ start (* 7 24) :hour)))
+      :when (plusp weekly)
+        :do (incf weeks)
+            (incf total weekly)
+      :do (setf start (lt:timestamp+ start (* 7 24) :hour))
+      :finally
+         (return (when (plusp weeks)
+                   (/ total weeks ))))))
+
+
+
 (defun get-projects (ids)
   "IDS is a list of ids"
   (mapcar 'db:store-object-with-id ids))
@@ -605,6 +637,10 @@ number object ids."
                     (:span :class "primary-color" (activity-name *current-activity*))))
               (:p "Total Time:"
                   (:span :class "tertiary-color" (hours-minutes-string (project-time project))))
+              (:p "Avg Hrs/Week:"
+                  (:span :class "tertiary-color"
+                         (when-let (avg (project-velocity project))
+                           (hours-minutes-string avg))))
               (:h4 "Estimated Work Left")
               (view/project-estimate project)
               (:p description)))))
@@ -843,6 +879,10 @@ number object ids."
    (:h1 (project-name project))
    (:p "Total Time: "
        (:span :class "tertiary-color" (hours-minutes-string (project-time project))))
+   (:p "Avg Hrs/Week:"
+       (:span :class "tertiary-color"
+              (when-let (avg (project-velocity project))
+                (hours-minutes-string avg))))
    (:p "Estimated Time To Completion: ")
    (view/project-estimate project)
    (:p (project-description project))
