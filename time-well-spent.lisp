@@ -223,6 +223,35 @@
          (return (when (plusp weeks)
                    (/ total weeks ))))))
 
+(defun work-started ()
+  (loop :for p :in (all-projects :include-archived-p t)
+        :for started = (project-started p)
+        :when started :minimize started))
+
+(defun total-time-worked (&key project-ids start (stop (get-universal-time)))
+  (loop :for p :in (if project-ids (get-projects project-ids) (all-projects :include-archived-p t))
+        :summing (project-time p :start start :stop stop)))
+
+(defun average-work-per-week ()
+  (when-let (started (work-started))
+    (loop
+      :with sum = 0.0
+      :with weeks = 0
+      :with best-week = 0
+      :with start = (lt:universal-to-timestamp started)
+      :with now = (lt:now)
+      :while (lt:timestamp< start now)
+      :for weekly = (total-time-worked :start (lt:timestamp-to-universal start)
+                                       :stop (lt:timestamp-to-universal
+                                              (lt:timestamp+ start (* 7 24) :hour)))
+      :when (plusp weekly)
+        :do (incf weeks)
+            (incf sum weekly)
+            (setf best-week (max best-week weekly))
+      :do (setf start (lt:timestamp+ start (* 7 24) :hour))
+      :finally
+         (return (values (when (plusp weeks) (/ sum weeks))
+                         best-week)))))
 
 
 (defun get-projects (ids)
@@ -1053,6 +1082,15 @@ number object ids."
           "All Time"))
      
      (:br)
+
+     (multiple-value-bind (avg best) (average-work-per-week)
+       (:p "Avg Hrs/Week:"
+           (:span :class "tertiary-color"
+                  (when avg (hours-minutes-string avg))))
+       (:p "Longest Week:"
+           (:span :class "tertiary-color"
+                  (when (plusp best) (hours-minutes-string best)))))
+     
      (:div 
       (:form
        :method "GET" :action "/stats"
