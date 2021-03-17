@@ -800,7 +800,7 @@ number object ids."
      (:div :class "inline" (view/activity-controls activity)))))
 
 (defpage activity (activity) (:stylesheets ("/css/main.css"))
-    (with-slots (db::id log name description) activity
+    (with-slots (db::id log name description category) activity
       (view/nav)
       (:div :class "main-content"
             (:p 
@@ -816,6 +816,11 @@ number object ids."
              :method "POST"
              (:input :value name :name "name" :class "form-input")
              (:label :for "name" "Name")
+             (:br)
+             (:select :name "category" :class "form-input"
+                      (dolist (cat (categories (get-config)))
+                        (:option :value cat :selected (equal cat category) cat)))
+             (:label :for "category" "Category")
              (:br)
              (:textarea :name "description" :rows 5 :cols 60 :class "form-input"
                         description)
@@ -1272,6 +1277,7 @@ number object ids."
   (if-let (activity (db:store-object-with-id (parse-integer id)))
     (progn (db:with-transaction ()
              (setf (activity-name activity) (getf *body* :name)
+                   (activity-category activity) (getf *body* :category)
                    (activity-description  activity) (getf *body* :description)))
            (http-redirect (format nil "/activity/view/~a" id)))
     (http-err 404 "Activity not found")))
