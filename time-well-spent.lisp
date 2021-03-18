@@ -949,27 +949,27 @@ number object ids."
    (:p "Estimated Time To Completion: ")
    (view/project-estimate project)
    (:p (project-description project))
+   (:div 
+    (if (project-archived-p project)
+        (:a :class "button"
+            :href (format nil "/project/unarchive/~a" (db:store-object-id project))
+            "Unarchive Project")
+        (:a :class "button"
+            :href (format nil "/project/archive/~a" (db:store-object-id project))
+            "Archive Project"))
 
-   (if (project-archived-p project)
-       (:a :class "button"
-           :href (format nil "/project/unarchive/~a" (db:store-object-id project))
-           "Unarchive Project")
-       (:a :class "button"
-           :href (format nil "/project/archive/~a" (db:store-object-id project))
-           "Archive Project"))
+    (:a :class "button" :id (format nil "delete-project-button")
+        "Delete Project")
 
-   (:a :class "button" :id (format nil "delete-project-button")
-            "Delete Project")
-
-   (:form
-    :id "delete-project-form"
-    :class "hidden"
-    :method "POST"
-    :action (format nil "/project/delete/~a" (db:store-object-id project))
-    (:p "Are you sure you want to delete this project?")
-    (:input :name "ignore" :value "Ignore Me" :class "hidden")
-    (:br)
-    (:button :class "button" :type "submit" "Comfirm & Delete"))
+    (:form
+     :id "delete-project-form"
+     :class "hidden"
+     :method "POST"
+     :action (format nil "/project/delete/~a" (db:store-object-id project))
+     (:p "Are you sure you want to delete this project?")
+     (:input :name "ignore" :value "Ignore Me" :class "hidden")
+     (:br)
+     (:button :class "button" :type "submit" "Comfirm & Delete")))
    (:br)
    (:div
     (let* ((id
@@ -996,6 +996,7 @@ number object ids."
        (:a :class "button"
            :href (format nil  "/project/view/~a" id)
            "View All"))
+      (:br)
       (:div :class "activity-title"
             (:a :href (format nil "/project/view/~a?~@[status=~a&~]by=ALPHABETICAL"
                               id status)
