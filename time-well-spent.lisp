@@ -62,6 +62,18 @@
 
 ;;; Utilities
 
+(defparameter +timezone-locale+ "US/Central")
+
+(defun timezone ()
+  (lt:find-timezone-by-location-name +timezone-locale+))
+
+(defun html-timestring-to-timestamp (str)
+  "str is the sort of string sent by the browser from an 'time' input element."
+  (destructuring-bind (h m) (split-sequence:split-sequence #\: str)
+    (lt:adjust-timestamp (lt:now)
+      (set :hour (parse-integer h))
+      (set :minute (parse-integer m)))))
+
 (defun local-datestring->utc (datestring &key end-of-day)
   (lt:timestamp-to-universal
    (lt:parse-timestring
@@ -800,38 +812,55 @@ number object ids."
      (:div :class "inline" (view/activity-controls activity)))))
 
 (defpage activity (activity) (:stylesheets ("/css/main.css"))
-    (with-slots (db::id log name description category) activity
-      (view/nav)
-      (:div :class "main-content"
-            (:p 
-             (:a
-              :class "tertiary-color"
-              :href (format nil "/project/view/~a"
-                            (db:store-object-id
-                             (activity-project activity)))
-              " ⮪ back to " (project-name (activity-project activity))))
-
-            (:form
-             :action (format nil "/activity/update/~a" db::id)
-             :method "POST"
-             (:input :value name :name "name" :class "form-input")
-             (:label :for "name" "Name")
-             (:br)
-             (:select :name "category" :class "form-input"
-                      (dolist (cat (categories (get-config)))
-                        (:option :value cat :selected (equal cat category) cat)))
-             (:label :for "category" "Category")
-             (:br)
-             (:textarea :name "description" :rows 5 :cols 60 :class "form-input"
-                        description)
-             (:label :for "description" "Description")
-             (:br)
-             (:button :type "submit" :class "button" "Update"))
+  (with-slots (db::id log name description category) activity
+    (view/nav)
+    (:div :class "main-content"
+          (:p 
+           (:a
+            :class "tertiary-color"
+            :href (format nil "/project/view/~a"
+                          (db:store-object-id
+                           (activity-project activity)))
+            " ⮪ back to " (project-name (activity-project activity))))
+          
+          (:form
+           :action (format nil "/activity/update/~a" db::id)
+           :method "POST"
+           (:input :value name :name "name" :class "form-input")
+           (:label :for "name" "Name")
+           (:br)
+           (:select :name "category" :class "form-input"
+             (dolist (cat (categories (get-config)))
+               (:option :value cat :selected (equal cat category) cat)))
+           (:label :for "category" "Category")
+           (:br)
+           (:textarea :name "description" :rows 5 :cols 60 :class "form-input"
+                      description)
+           (:label :for "description" "Description")
+           (:br)
+           (:button :type "submit" :class "button" "Update"))
             
             (:br) (:br)
             (:a :class "button"
                 :href (format nil "/activity/delete/~a" db::id)
                 "Delete This Activity")
+
+            (:h4 "Manuall Add Time")
+            (:form :action (format nil "/activity/add-time/~a" db::id)
+                   :method "POST"
+                   (:table
+                    (:tr
+                     (:td 
+                      (:label :for "start-time" "Started"))
+                     (:td
+                      (:label :for "stop-time" "Stopped")))
+                    (:tr
+                     (:td
+                      (:input :name "start-time" :type "time"))
+                     (:td 
+                      (:input :name "stop-time" :type "time"))))
+                   (:button :class "button"  :type "submit" "Add time"))
+
             (:h4 "Log ")
             (:ul :class "unstyled"
                  (dolist (span log)
@@ -921,9 +950,6 @@ number object ids."
    (view/project-estimate project)
    (:p (project-description project))
 
-   (:button :class "button" :id (format nil "delete-project-button")
-            "Delete Project")
-
    (if (project-archived-p project)
        (:a :class "button"
            :href (format nil "/project/unarchive/~a" (db:store-object-id project))
@@ -931,6 +957,9 @@ number object ids."
        (:a :class "button"
            :href (format nil "/project/archive/~a" (db:store-object-id project))
            "Archive Project"))
+
+   (:a :class "button" :id (format nil "delete-project-button")
+            "Delete Project")
 
    (:form
     :id "delete-project-form"
@@ -941,7 +970,7 @@ number object ids."
     (:input :name "ignore" :value "Ignore Me" :class "hidden")
     (:br)
     (:button :class "button" :type "submit" "Comfirm & Delete"))
-
+   (:br)
    (:div
     (let* ((id
              (db:store-object-id project))
@@ -1117,6 +1146,7 @@ number object ids."
        (:br)
        (:button :type "submit" :class "button" "View")))
 
+     
      (:div :class "timesheet-entry tertiary-color"
            (:span "PROJECT") (:span "HOURS") (:span))
      (let ((start (and query  (local-datestring->utc (getf query :start-date))))
@@ -1141,6 +1171,23 @@ number object ids."
 
 (defun redirect-to-referrer ()
   (http-redirect (gethash "referer" (getf *req* :headers))))
+
+
+(defroute :post "/activity/add-time/:id"
+  (if-let (activity (db:store-object-with-id (parse-integer id)))
+    (progn 
+      (db:with-transaction ()
+        (push (make-instance 'time-span
+                             :start (lt:timestamp-to-universal
+                                     (html-timestring-to-timestamp
+                                      (getf *body* :start-time)))
+                             :stop (lt:timestamp-to-universal
+                                    (html-timestring-to-timestamp
+                                     (getf *body* :stop-time))))
+              (activity-log activity)))
+      (redirect-to-referrer))
+    (http-err 404  "Activity not found")))
+
 
 (defroute :get "/css/main.css"
   (http-ok "text/css"
