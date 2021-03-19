@@ -194,6 +194,11 @@
     :accessor project-description
     :initarg :description
     :initform "")
+   (priority
+    :accessor project-priority
+    :initarg :priority
+    :initform 1
+    :documentation "For sorting projects and controlling their display.")
    (archived-p
     :accessor project-archived-p
     :initform nil))
@@ -277,8 +282,10 @@
      (lambda (project) (or include-archived-p
                            (eql just-archived-p (project-archived-p project))))     
      (db:store-objects-with-class 'project)))
-   #'>
-   :key (lambda (o) (db:store-object-last-change o 1))))
+   (lambda (a b)
+     (cond ((= (project-priority a) (project-priority b))
+            (> (db:store-object-last-change a 1) (db:store-object-last-change b 1)))
+           (t (> (project-priority a) (project-priority b)))))))
 
 (defclass time-span (db:store-object)
   ((start-time
@@ -663,6 +670,21 @@ number object ids."
       :grid-row-gap 1.5em
       :grid-template-columns "repeat(auto-fit, minmax(250px, auto))"))))
 
+(defview priority-controls (project)
+  (with-slots (db::id priority) project
+    (:span 
+     (:form :style "display:inline;"
+            :method "POST"
+            :action (format nil "/project/priority-dec/~a" db::id)
+            (:input :name "dummy"  :style "display:none;" :value "0")
+            (:button :class "button" :type "submit" "-"))
+     (dotimes (i priority) (:text-node "⏲"))
+     (:form :style "display:inline;"
+            :method "POST"
+            :action (format nil "/project/priority-inc/~a" db::id)
+            (:input :name "dummy"  :style "display:none;" :value "0")
+            (:button :class "button" :type "submit" "+")))))
+
 (defview project-dashboard (project)
   (with-slots (db::id name description) project
 
@@ -671,6 +693,7 @@ number object ids."
                               (eql project (activity-project *current-activity*)))
                          "project card primary-highlight"
                          "project card")
+              (view/priority-controls project)
               (:h2 name)
               (when (and *current-activity*
                          (eql project (activity-project *current-activity*)))
@@ -1173,6 +1196,21 @@ number object ids."
 (defun redirect-to-referrer ()
   (http-redirect (gethash "referer" (getf *req* :headers))))
 
+
+(defroute :post "/project/priority-dec/:id"
+  (if-let (project (db:store-object-with-id (parse-integer id)))
+    (db:with-transaction ()
+      (setf (project-priority project)
+            (max 0 (1- (project-priority project))))
+      (redirect-to-referrer))
+    (http-err 404 "Project Not Found")))
+
+(defroute :post "/project/priority-inc/:id"
+  (if-let (project (db:store-object-with-id (parse-integer id)))
+    (db:with-transaction ()
+      (incf (project-priority project))
+      (redirect-to-referrer))
+    (http-err 404 "Project Not Found")))
 
 (defroute :post "/activity/add-time/:id"
   (if-let (activity (db:store-object-with-id (parse-integer id)))
