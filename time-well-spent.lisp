@@ -812,6 +812,7 @@ number object ids."
           (:a :class "primary-color"
               :href (format nil  "/project/view/~a" (db:store-object-id project))
               (:h3  (project-name project)))
+          (view/priority-controls project)
           (:div :class "activity-title"
                 (:span "NAME")
                 (:span "CATEGORY")
@@ -963,6 +964,7 @@ number object ids."
    :class "main-content"
     (view/new-activity-form project)
    (:h1 (project-name project))
+   (view/priority-controls project)
    (:p "Total Time: "
        (:span :class "tertiary-color" (hours-minutes-string (project-time project))))
    (:p "Avg Hrs/Week:"
