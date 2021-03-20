@@ -342,6 +342,10 @@
     :accessor activity-status
     :initarg :status
     :initform :todo)
+   (priority
+    :accessor activity-priority
+    :initarg :priority
+    :initform 1)
    (category
     :accessor activity-category
     :initarg :category
@@ -442,17 +446,17 @@
    (< (db:store-object-last-change a 2)
       (db:store-object-last-change b 2))))
 
-(defun sort-activities (activities &key (by :order-added))
+(defun sort-activities (activities &key (by :priority))
   "BY is one of
 
-:ORDER-ADDED
+:PRIORITY
 :CATEGORY 
 :WORKED
 :ESTIMATE
 :ALPHABETICAL
 
 ORDER-ADDED assumes low number store object id's are added before high
-number object ids."
+number object ids. "
   (sort (copy-seq activities)
         (case by
           (:alphabetical
@@ -468,8 +472,8 @@ number object ids."
            (lambda (a b)
              (> (activity-estimate a) (activity-estimate b))))
           (t (lambda (a b)
-               (< (db:store-object-id a)
-                  (db:store-object-id b)))))))
+               (> (activity-priority a)
+                  (activity-priority b)))))))
 
 ;;; Pages
 
@@ -675,15 +679,14 @@ number object ids."
     (:span 
      (:form :style "display:inline;"
             :method "POST"
-            :action (format nil "/project/priority-dec/~a" db::id)
+            :action (format nil "/priority-dec/~a" db::id)
             (:input :name "dummy"  :style "display:none;" :value "0")
-            (:button :class "button" :type "submit" "-"))
-     (dotimes (i priority) (:text-node "⏲"))
+            (:button :class "button" :type "submit" "↓"))
      (:form :style "display:inline;"
             :method "POST"
-            :action (format nil "/project/priority-inc/~a" db::id)
+            :action (format nil "/priority-inc/~a" db::id)
             (:input :name "dummy"  :style "display:none;" :value "0")
-            (:button :class "button" :type "submit" "+")))))
+            (:button :class "button" :type "submit" "↑")))))
 
 (defview project-dashboard (project)
   (with-slots (db::id name description) project
@@ -900,7 +903,7 @@ number object ids."
 
 
 (defview activity-controls (activity)
-  (with-slots (db::id name currently-working-p status log) activity
+  (with-slots (db::id name currently-working-p status log priority) activity
     (let ((status-id (format nil "status-~a" db::id))
           (form-id (format nil "status-form-~a" db::id)))
       (if currently-working-p 
@@ -918,6 +921,18 @@ number object ids."
                  (if (eql s status)
                      (:option  :value s :selected "true" s)
                      (:option :value s s)))))
+      
+      (:span
+       (:form :style "display:inline;"
+              :method "POST"
+              :action (format nil "/priority-dec/~a" db::id)
+              (:input :name "dummy" :style "display:none;" :value "0")
+              (:button :class "button" :type "submit" "↓"))
+       (:form :style "display:inline;"
+              :method "POST"
+              :action (format nil "/priority-inc/~a" db::id)
+              (:input :name "dummy"  :style "display:none;" :value "0")
+              (:button :class "button" :type "submit" "↑")))
       
       (:a :class "tertiary-color"
           :href (format nil "/activity/view/~a" db::id)
@@ -1199,18 +1214,19 @@ number object ids."
   (http-redirect (gethash "referer" (getf *req* :headers))))
 
 
-(defroute :post "/project/priority-dec/:id"
-  (if-let (project (db:store-object-with-id (parse-integer id)))
+(defroute :post "/priority-dec/:id"
+  (if-let (object (db:store-object-with-id (parse-integer id)))
     (db:with-transaction ()
-      (setf (project-priority project)
-            (max 0 (1- (project-priority project))))
+      (with-slots (priority) object 
+        (setf priority (max 0 (1- priority))))
       (redirect-to-referrer))
     (http-err 404 "Project Not Found")))
 
-(defroute :post "/project/priority-inc/:id"
-  (if-let (project (db:store-object-with-id (parse-integer id)))
+(defroute :post "/priority-inc/:id"
+  (if-let (object (db:store-object-with-id (parse-integer id)))
     (db:with-transaction ()
-      (incf (project-priority project))
+      (with-slots (priority) object
+        (incf priority))
       (redirect-to-referrer))
     (http-err 404 "Project Not Found")))
 
