@@ -464,7 +464,9 @@ number object ids. "
              (string< (activity-name a) (activity-name b))))
           (:category
            (lambda (a b)
-             (string< (activity-category a) (activity-category b))))
+             (if (string-equal (activity-category a) (activity-category b))
+                 (> (activity-priority a) (activity-priority b))
+                 (string< (activity-category a) (activity-category b)))))
           (:worked
            (lambda (a b)
              (> (seconds-worked a) (seconds-worked b))))
