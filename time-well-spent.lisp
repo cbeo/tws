@@ -718,10 +718,7 @@ number object ids. "
          (:li :class "tertiary-color"
               (format nil "Between ~a and ~a"
                       (hours-minutes-string  (* 60 60  (getf prediction :min)))
-                      (hours-minutes-string (* 60 60 (getf prediction :max)))))
-         (:li :class "tertiary-color"
-              (format nil "Average ~a"
-                      (hours-minutes-string (* 60 60 (getf prediction :average))))))))
+                      (hours-minutes-string (* 60 60 (getf prediction :max))))))))
 
 
 (defview nav ()
