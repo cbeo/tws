@@ -64,8 +64,6 @@
 
 (defparameter +timezone-locale+ "US/Central")
 
-(defun timezone ()
-  (lt:find-timezone-by-location-name +timezone-locale+))
 
 (defun html-timestring-to-timestamp (str)
   "str is the sort of string sent by the browser from an 'time' input element."
